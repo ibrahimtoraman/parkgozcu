@@ -1,0 +1,55 @@
+name: parkgozcu
+description: Park cezasi ve arac cekilme noktalarini toplulukla paylasan mobil uygulama.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cached_network_image: ^3.4.1
+  cloud_firestore: ^5.6.0
+  cupertino_icons: ^1.0.8
+  firebase_auth: ^5.4.0
+  firebase_core: ^3.9.0
+  firebase_messaging: ^15.1.6
+  firebase_storage: ^12.3.7
+  geolocator: ^13.0.2
+  google_maps_flutter: ^2.10.0
+  google_sign_in: ^6.2.2
+  http: ^1.2.2
+  image_picker: ^1.1.2
+  intl: any
+  provider: ^6.1.2
+  sign_in_with_apple: ^6.1.4
+  uuid: ^4.5.1
+  url_launcher: ^6.3.2
+  flutter_svg: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/parkgozcu_logo.png
+    - assets/images/parkgozcu_logo.svg
+    - assets/images/parkgozcu_login_logo.png
+    - assets/images/parkgozcu_login_logo_exact.png
+    - assets/images/parkgozcu_login_current.png
+    - assets/images/parkgozcu_login_hero.svg
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/images/parkgozcu_logo.png
+  adaptive_icon_background: "#006400"
+  adaptive_icon_foreground: assets/images/parkgozcu_logo.png
+  remove_alpha_ios: true

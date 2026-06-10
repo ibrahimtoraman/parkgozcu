@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "439704193376",
+    "project_id": "parkgozcuproje",
+    "storage_bucket": "parkgozcuproje.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:439704193376:android:389cfa9d7a49938fe27605",
+        "android_client_info": {
+          "package_name": "com.parkgozcu.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "439704193376-fe79rtvlemfuuoit7uqgns3tvrep48j2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.parkgozcu.app",
+            "certificate_hash": "479f15020b7156cd337fa0abefce2299b9ae3d3f"
+          }
+        },
+        {
+          "client_id": "439704193376-rlub8e8k26nqd3ismff438hkb4hgtr08.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAl5kiM0tqQ1jyLcR1N72Lo2VQgLhb-KoQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "439704193376-rlub8e8k26nqd3ismff438hkb4hgtr08.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
