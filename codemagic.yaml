@@ -4,7 +4,7 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.parkgozcu.parkgozcu
+        bundle_identifier: com.ibrahim.parkgozcu
       flutter: stable
       xcode: latest
     scripts:
