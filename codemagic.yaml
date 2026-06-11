@@ -2,6 +2,9 @@ workflows:
   ios-release:
     name: iOS Release
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.parkgozcu.parkgozcu
       flutter: stable
       xcode: latest
     scripts:
@@ -12,9 +15,12 @@ workflows:
         script: |
           cd ios
           pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
       - name: Build IPA
         script: |
-          flutter build ipa --release
+          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/archive/*.xcarchive

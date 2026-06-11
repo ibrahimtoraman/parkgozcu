@@ -1,0 +1,10 @@
+yaptığım değişiklikleri GitHub'a göndermem için terminalde şunları yap önce klasörü bul:
+
+B:
+cd parkgozcu
+
+git add .
+git commit -m "Fix build path"
+git push
+
+komutlarıyla değişikliği GitHub'a gönderin.
