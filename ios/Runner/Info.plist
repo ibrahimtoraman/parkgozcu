@@ -28,10 +28,6 @@
 	<true/>
 	<key>MinimumOSVersion</key>
 	<string>14.0</string>
-	<key>UIDeviceFamily</key>
-	<array>
-		<integer>1</integer>
-	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
