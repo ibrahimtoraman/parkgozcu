@@ -1,14 +1,10 @@
-workflows:
-  ios-release:
-    name: iOS Release
-    environment:
-      flutter: stable
-      xcode: latest
-    scripts:
-      - name: Get dependencies
-        script: flutter pub get
-      - name: Build IPA
-        script: |
-          flutter build ipa --release --no-codesign --project-path ios
-    artifacts:
-      - build/ios/ipa/*.ipa
+scripts:
+  - name: Get dependencies
+    script: |
+      cd ios
+      pod install
+      cd ..
+      flutter pub get
+  - name: Build IPA
+    script: |
+      flutter build ipa --release --no-codesign
