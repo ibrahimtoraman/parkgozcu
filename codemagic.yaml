@@ -29,3 +29,6 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - park gozcu test
