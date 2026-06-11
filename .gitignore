@@ -5,6 +5,10 @@
 build/
 pubspec.lock
 
+# Apple App Store Connect private keys must stay local.
+parkgozcu_apple_key/
+*.p8
+
 android/.gradle/
 android/local.properties
 android/app/build/
