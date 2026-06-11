@@ -8,7 +8,7 @@ class DefaultFirebaseOptions {
       messagingSenderId: '439704193376',
       projectId: 'parkgozcuproje',
       storageBucket: 'parkgozcuproje.firebasestorage.app',
-      iosBundleId: 'com.parkgozcu.app',
+      iosBundleId: 'com.ibrahim.parkgozcu',
       androidClientId: 'REPLACE_WITH_ANDROID_CLIENT_ID',
       iosClientId: 'REPLACE_WITH_IOS_CLIENT_ID',
     );
