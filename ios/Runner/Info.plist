@@ -43,6 +43,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Bildirim oluştururken fotoğraf çekebilmen için kamera erişimi gerekiyor.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Haritadaki bildirimleri konumuna göre göstermek ve bildirim konumunu daha doğru seçebilmek için konum erişimi gerekiyor.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Haritada konumunu göstermek ve bildirim konumunu seçmek için konum erişimi gerekiyor.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
