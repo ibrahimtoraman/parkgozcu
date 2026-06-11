@@ -14,6 +14,7 @@ workflows:
           pod install
       - name: Build IPA
         script: |
-          flutter build ipa --release --no-codesign
+          flutter build ipa --release
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
