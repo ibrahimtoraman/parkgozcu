@@ -1,10 +1,19 @@
-scripts:
-  - name: Get dependencies
-    script: |
-      cd ios
-      pod install
-      cd ..
-      flutter pub get
-  - name: Build IPA
-    script: |
-      flutter build ipa --release --no-codesign
+workflows:
+  ios-release:
+    name: iOS Release
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Get dependencies
+        script: |
+          flutter pub get
+      - name: Install pods
+        script: |
+          cd ios
+          pod install
+      - name: Build IPA
+        script: |
+          flutter build ipa --release --no-codesign --scheme Runner
+    artifacts:
+      - build/ios/ipa/*.ipa
