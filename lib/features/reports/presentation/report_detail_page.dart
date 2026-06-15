@@ -46,16 +46,51 @@ class ReportDetailPage extends StatelessWidget {
             appBar: AppBar(
               title: const Text('Bildirim Detayı'),
               actions: [
-                IconButton(
-                  onPressed: () => _shareReport(context, report),
-                  icon: const Icon(Icons.share_outlined),
-                  tooltip: 'Paylaş',
+                Builder(
+                  builder: (buttonContext) {
+                    return IconButton(
+                      onPressed: () => _shareReport(buttonContext, report),
+                      icon: const Icon(Icons.share_outlined),
+                      tooltip: 'Paylaş',
+                    );
+                  },
                 ),
               ],
             ),
             body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (isOwner)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.deepPurple.withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.person_pin, color: Colors.deepPurple),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Bu bildirimi sen oluşturdun',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Colors.deepPurple,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -90,7 +125,11 @@ class ReportDetailPage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _CreatorLink(report: report),
+                _CreatorLink(
+                  report: report,
+                  isOwner: isOwner,
+                  ownerDisplayName: auth.user?.name ?? report.userName,
+                ),
                 const SizedBox(height: 12),
                 if (report.address.isNotEmpty)
                   _InfoCard(
@@ -109,10 +148,6 @@ class ReportDetailPage extends StatelessWidget {
                           ],
                         )
                       : _ImageGallery(urls: report.imageUrls),
-                ),
-                _InfoCard(
-                  title: 'Bildirim Durumu',
-                  child: _ReportStatusInfo(report: report),
                 ),
                 _InfoCard(
                   title: 'Açıklama',
@@ -175,18 +210,37 @@ Future<void> _shareReport(BuildContext context, ParkingReport report) async {
       'Açıklama: ${report.description.isEmpty ? 'Yok' : report.description}',
     );
 
-  await Share.share(buffer.toString().trim());
+  final box = context.findRenderObject() as RenderBox?;
+  final origin = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
+
+  await Share.share(
+    buffer.toString().trim(),
+    sharePositionOrigin: origin,
+  );
 }
 
 class _CreatorLink extends StatelessWidget {
-  const _CreatorLink({required this.report});
+  const _CreatorLink({
+    required this.report,
+    required this.isOwner,
+    required this.ownerDisplayName,
+  });
 
   final ParkingReport report;
+  final bool isOwner;
+  final String ownerDisplayName;
 
   @override
   Widget build(BuildContext context) {
+    final displayName = isOwner ? ownerDisplayName : report.userName;
+    final backgroundColor = isOwner
+        ? Colors.deepPurple.withValues(alpha: 0.08)
+        : AppColors.red.withValues(alpha: 0.06);
+    final accentColor = isOwner ? Colors.deepPurple : AppColors.red;
+    final label = isOwner ? 'Senin bildirimin: ' : 'Oluşturan Kişi: ';
+
     return Material(
-      color: AppColors.red.withValues(alpha: 0.06),
+      color: backgroundColor,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -195,7 +249,7 @@ class _CreatorLink extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => UserPublicProfilePage(
                 userId: report.userId,
-                userName: report.userName,
+                userName: displayName,
               ),
             ),
           );
@@ -204,7 +258,10 @@ class _CreatorLink extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.person_outline, color: AppColors.red),
+              Icon(
+                isOwner ? Icons.person_pin : Icons.person_outline,
+                color: accentColor,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: RichText(
@@ -213,67 +270,26 @@ class _CreatorLink extends StatelessWidget {
                           color: AppColors.darkGrey,
                         ),
                     children: [
-                      const TextSpan(
-                        text: 'Oluşturan Kişi: ',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                      TextSpan(
+                        text: label,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       TextSpan(
-                        text: report.userName,
-                        style: const TextStyle(
+                        text: displayName,
+                        style: TextStyle(
                           fontWeight: FontWeight.w900,
-                          color: AppColors.red,
+                          color: accentColor,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.mediumGrey),
+              Icon(Icons.chevron_right, color: AppColors.mediumGrey),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ReportStatusInfo extends StatelessWidget {
-  const _ReportStatusInfo({required this.report});
-
-  final ParkingReport report;
-
-  String get _statusText {
-    return switch (report.type) {
-      ReportType.parkingFine =>
-        'Bu noktada park cezası uygulandığı bildirildi.',
-      ReportType.towedVehicle => 'Bu noktada araç çekildiği bildirildi.',
-      ReportType.noParking => 'Bu noktada park yasağı olduğu bildirildi.',
-      ReportType.heavyInspection =>
-        'Bu noktada yoğun denetim olduğu bildirildi.',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(report.type.icon, color: report.type.color, size: 22),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                report.type.label,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(_statusText),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

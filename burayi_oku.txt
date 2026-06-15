@@ -15,10 +15,8 @@ komutlarıyla değişikliği GitHub'a gönderin.
 APPLE İÇİN:
 
 cd b:\parkgozcu
-git add lib/core/theme/app_theme.dart lib/core/theme/theme_controller.dart lib/features/profile/presentation/profile_page.dart lib/features/reports/presentation/report_detail_page.dart pubspec.yaml
-
-git commit -m "Improve dark theme, bottom nav, and photo preview dismiss"
-
+git add .
+git commit -m "Add report detail layout, share, content reports, and profile view"
 git push origin HEAD
 
 
@@ -40,3 +38,15 @@ Artifacts bölümünü aç
 
 
 IPA indirdikten sonra https://www.diawi.com/ sitesine gir dosyayı at link oluştur sonra telefondan aç
+
+
+
+ANDORİD İÇİN: 
+ Android telefonda hızlı test (en kolay)
+Android telefonu USB ile bağla
+Telefonda Geliştirici seçenekleri → USB hata ayıklama açık olsun
+PowerShell’de:
+cd b:\parkgozcu
+flutter pub get
+flutter devices
+flutter run

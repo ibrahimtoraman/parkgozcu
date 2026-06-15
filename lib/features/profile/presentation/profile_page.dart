@@ -798,7 +798,7 @@ class _ProfileHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Kullanıcı No: ${formatUserNumber(userId)}',
+                  formatUserTag(userId),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w600,

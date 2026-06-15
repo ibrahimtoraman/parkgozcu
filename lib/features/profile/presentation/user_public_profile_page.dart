@@ -70,7 +70,7 @@ class UserPublicProfilePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Kullanıcı No: ${formatUserNumber(userId)}',
+                          formatUserTag(userId),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.82),
                             fontWeight: FontWeight.w600,

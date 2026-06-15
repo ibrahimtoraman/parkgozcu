@@ -21,7 +21,12 @@ class AuthRepository {
   Future<AppUser?> currentUserProfile() async {
     final user = _auth.currentUser;
     if (user == null) return null;
-    return _ensureUserDocument(user);
+    await user.reload();
+    final refreshed = _auth.currentUser ?? user;
+    return _ensureUserDocument(
+      refreshed,
+      preferredName: refreshed.displayName?.trim(),
+    );
   }
 
   Future<AppUser> signInWithGoogle() async {
@@ -47,7 +52,7 @@ class AuthRepository {
     final appleCredential = await SignInWithApple.getAppleIDCredential(
       scopes: [
         AppleIDAuthorizationScopes.email,
-        AppleIDAuthorizationScopes.fullName
+        AppleIDAuthorizationScopes.fullName,
       ],
     );
     final oauthCredential = OAuthProvider('apple.com').credential(
@@ -68,6 +73,14 @@ class AuthRepository {
     }
 
     final refreshedUser = _auth.currentUser ?? result.user!;
+    if (givenName.isNotEmpty || familyName.isNotEmpty || appleName.isNotEmpty) {
+      await _firestore.collection('Users').doc(refreshedUser.uid).set({
+        if (givenName.isNotEmpty) 'appleGivenName': givenName,
+        if (familyName.isNotEmpty) 'appleFamilyName': familyName,
+        if (appleName.isNotEmpty) 'name': appleName,
+      }, SetOptions(merge: true));
+    }
+
     return _ensureUserDocument(
       refreshedUser,
       preferredName: appleName.isNotEmpty ? appleName : null,
@@ -111,10 +124,18 @@ class AuthRepository {
     try {
       final ref = _firestore.collection('Users').doc(user.uid);
       final snapshot = await ref.get();
+      final storedAppleName =
+          snapshot.exists ? _nameFromStoredAppleFields(snapshot.data()!) : '';
 
       if (snapshot.exists) {
         final existing = AppUser.fromMap(user.uid, snapshot.data()!);
-        final mergedName = _pickBetterName(existing.name, resolvedName);
+        final nameCandidate = _firstNonEmpty([
+          preferredName,
+          storedAppleName,
+          user.displayName,
+          resolvedName,
+        ]);
+        final mergedName = _pickBetterName(existing.name, nameCandidate);
         final mergedEmail = _pickBetterEmail(existing.email, resolvedEmail);
 
         if (mergedName != existing.name || mergedEmail != existing.email) {
@@ -128,7 +149,15 @@ class AuthRepository {
         return existing;
       }
 
-      await ref.set(profile.toMap());
+      final initialName = _firstNonEmpty([
+        preferredName,
+        storedAppleName,
+        user.displayName,
+        resolvedName,
+      ]);
+
+      await ref.set(profile.copyWith(name: initialName).toMap());
+      return profile.copyWith(name: initialName);
     } on FirebaseException catch (error) {
       if (error.code != 'unavailable') rethrow;
     }
@@ -136,12 +165,29 @@ class AuthRepository {
     return profile;
   }
 
+  String _nameFromStoredAppleFields(Map<String, dynamic> data) {
+    final given = (data['appleGivenName'] as String? ?? '').trim();
+    final family = (data['appleFamilyName'] as String? ?? '').trim();
+    return [given, family].where((part) => part.isNotEmpty).join(' ');
+  }
+
+  String? _firstNonEmpty(List<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return null;
+  }
+
   String _resolveName({
     required User user,
     String? preferredName,
   }) {
-    if (preferredName != null && preferredName.trim().isNotEmpty) {
-      return preferredName.trim();
+    final preferred = preferredName?.trim();
+    if (preferred != null && preferred.isNotEmpty) {
+      return preferred;
     }
 
     final displayName = user.displayName?.trim();
@@ -167,14 +213,11 @@ class AuthRepository {
     return user.email?.trim() ?? '';
   }
 
-  String _pickBetterName(String existingName, String candidateName) {
-    if (_isPlaceholderName(existingName) &&
-        !_isPlaceholderName(candidateName)) {
-      return candidateName;
-    }
-    if (existingName.trim().isEmpty && candidateName.trim().isNotEmpty) {
-      return candidateName;
-    }
+  String _pickBetterName(String existingName, String? candidateName) {
+    final candidate = candidateName?.trim() ?? '';
+    if (candidate.isEmpty) return existingName;
+    if (_isPlaceholderName(existingName)) return candidate;
+    if (existingName.trim().isEmpty) return candidate;
     return existingName;
   }
 
