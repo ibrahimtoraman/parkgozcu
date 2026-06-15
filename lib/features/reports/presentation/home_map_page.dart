@@ -180,25 +180,6 @@ class _HomeMapPageState extends State<HomeMapPage> {
                 ),
               ),
             ),
-          if (_allReports.length > _cachedReportMarkers.length)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 196,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Text(
-                    'Performans için yakındaki ${_cachedReportMarkers.length} bildirim gösteriliyor.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
-                ),
-              ),
-            ),
           Positioned(
             right: 16,
             bottom: 112,

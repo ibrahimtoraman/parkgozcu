@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/navigation/app_shell_controller.dart';
+import '../../../core/utils/user_formatter.dart';
 import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auto_care/presentation/auto_care_page.dart';
@@ -238,7 +239,7 @@ class ProfilePage extends StatelessWidget {
         children: [
           _ProfileHeroCard(
             name: user.name,
-            email: _formatProfileEmail(user.email),
+            userId: user.id,
             photoUrl: user.photoUrl,
           ),
           const SizedBox(height: 14),
@@ -535,17 +536,6 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-String _formatProfileEmail(String email) {
-  final trimmed = email.trim();
-  if (trimmed.isEmpty) {
-    return 'E-posta paylaşılmadı';
-  }
-  if (trimmed.contains('privaterelay.appleid.com')) {
-    return trimmed;
-  }
-  return trimmed;
-}
-
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
     required this.icon,
@@ -747,12 +737,12 @@ Uint8List _decodeInlineImage(String source) {
 class _ProfileHeroCard extends StatelessWidget {
   const _ProfileHeroCard({
     required this.name,
-    required this.email,
+    required this.userId,
     required this.photoUrl,
   });
 
   final String name;
-  final String email;
+  final String userId;
   final String photoUrl;
 
   @override
@@ -799,33 +789,22 @@ class _ProfileHeroCard extends StatelessWidget {
               children: [
                 Text(
                   name,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                       ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 10),
                 Text(
-                  email,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  'Kullanıcı No: ${formatUserNumber(userId)}',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
+                    color: Colors.white.withValues(alpha: 0.78),
                     fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
                 ),
-                if (email.contains('privaterelay.appleid.com')) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Apple gizli e-posta kullanılıyor',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.68),
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 Container(
                   padding:

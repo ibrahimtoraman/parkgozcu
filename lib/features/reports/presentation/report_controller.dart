@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/services/location_service.dart';
 import '../data/report_repository.dart';
+import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
 
 class ReportController extends ChangeNotifier {
@@ -125,6 +126,22 @@ class ReportController extends ChangeNotifier {
 
   Stream<int> watchFalseFlaggedUserReportCount(String userId) {
     return _repository.watchFalseFlaggedUserReportCount(userId);
+  }
+
+  Future<void> submitContentReport({
+    required ParkingReport report,
+    required String reporterId,
+    required String reporterName,
+    required ContentReportReason reason,
+    String detail = '',
+  }) {
+    return _repository.submitContentReport(
+      report: report,
+      reporterId: reporterId,
+      reporterName: reporterName,
+      reason: reason,
+      detail: detail,
+    );
   }
 
   String _friendlyErrorMessage(Object error) {

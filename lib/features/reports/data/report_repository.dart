@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
 
 class ReportFilters {
@@ -317,6 +318,41 @@ class ReportRepository {
               .where((doc) => (doc.data()['falseReportCount'] as int? ?? 0) > 0)
               .length,
         );
+  }
+
+  Future<void> submitContentReport({
+    required ParkingReport report,
+    required String reporterId,
+    required String reporterName,
+    required ContentReportReason reason,
+    String detail = '',
+  }) async {
+    if (_auth.currentUser == null) {
+      throw FirebaseAuthException(
+        code: 'unauthenticated',
+        message: 'Rapor göndermek için giriş yapmalısın.',
+      );
+    }
+
+    await _firestore
+        .collection('ContentReports')
+        .doc('${report.id}_$reporterId')
+        .set({
+      'reportId': report.id,
+      'reportType': report.type.name,
+      'reportTypeLabel': report.type.label,
+      'reportAddress': report.address,
+      'reportDescription': report.description,
+      'reportOwnerId': report.userId,
+      'reportOwnerName': report.userName,
+      'reporterId': reporterId,
+      'reporterName': reporterName,
+      'reason': reason.name,
+      'reasonLabel': reason.label,
+      'detail': detail.trim(),
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    }).timeout(const Duration(seconds: 12));
   }
 
   Future<String> _uploadImage({

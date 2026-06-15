@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/navigation/app_shell_controller.dart';
 import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../profile/presentation/user_public_profile_page.dart';
+import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
 import 'report_controller.dart';
 
@@ -24,27 +27,40 @@ class ReportDetailPage extends StatelessWidget {
     final controller = context.read<ReportController>();
 
     return EdgeSwipeBack(
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Bildirim Detayı')),
-        body: StreamBuilder<ParkingReport>(
-          stream: controller.watchReport(reportId),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      child: StreamBuilder<ParkingReport>(
+        stream: controller.watchReport(reportId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return Scaffold(
+              appBar: AppBar(title: const Text('Bildirim Detayı')),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
 
-            final report = snapshot.data!;
-            final auth = context.watch<AuthController>();
-            final currentUserId = auth.user?.id;
-            final isOwner = currentUserId == report.userId;
-            return ListView(
+          final report = snapshot.data!;
+          final auth = context.watch<AuthController>();
+          final currentUserId = auth.user?.id;
+          final isOwner = currentUserId == report.userId;
+
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Bildirim Detayı'),
+              actions: [
+                IconButton(
+                  onPressed: () => _shareReport(context, report),
+                  icon: const Icon(Icons.share_outlined),
+                  tooltip: 'Paylaş',
+                ),
+              ],
+            ),
+            body: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _ImageGallery(urls: report.imageUrls),
-                const SizedBox(height: 16),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CircleAvatar(
+                      radius: 24,
                       backgroundColor:
                           report.type.color.withValues(alpha: 0.15),
                       child: Icon(report.type.icon, color: report.type.color),
@@ -59,24 +75,45 @@ class ReportDetailPage extends StatelessWidget {
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                ?.copyWith(fontWeight: FontWeight.w900),
                           ),
-                          Text(DateFormat.yMMMMd('tr_TR')
-                              .add_Hm()
-                              .format(report.createdAt)),
+                          const SizedBox(height: 4),
+                          Text(
+                            DateFormat.yMMMMd('tr_TR')
+                                .add_Hm()
+                                .format(report.createdAt),
+                            style: const TextStyle(color: AppColors.mediumGrey),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                _CreatorLink(report: report),
+                const SizedBox(height: 12),
                 if (report.address.isNotEmpty)
                   _InfoCard(
                     title: 'Konum Bilgisi',
                     child: _LocationInfo(report: report),
                   ),
+                _InfoCard(
+                  title: 'Fotoğraflar',
+                  child: report.imageUrls.isEmpty
+                      ? const Row(
+                          children: [
+                            Icon(Icons.image_not_supported_outlined,
+                                color: AppColors.mediumGrey),
+                            SizedBox(width: 8),
+                            Text('Bu bildirime fotoğraf eklenmemiş.'),
+                          ],
+                        )
+                      : _ImageGallery(urls: report.imageUrls),
+                ),
+                _InfoCard(
+                  title: 'Bildirim Durumu',
+                  child: _ReportStatusInfo(report: report),
+                ),
                 _InfoCard(
                   title: 'Açıklama',
                   child: Text(
@@ -86,29 +123,322 @@ class ReportDetailPage extends StatelessWidget {
                   ),
                 ),
                 _InfoCard(
-                  title: 'Oluşturan',
-                  child: Text(report.userName),
-                ),
-                _InfoCard(
                   title: 'Topluluk doğrulaması',
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Text('${report.verifyCount} doğrulama')),
-                      Expanded(
-                          child: Text(
-                              '${report.falseReportCount} yanlış bilgi bildirimi')),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('${report.verifyCount} doğrulama'),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '${report.falseReportCount} yanlış bilgi bildirimi',
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!isOwner) ...[
+                        const SizedBox(height: 14),
+                        _ActionButtons(reportId: report.id),
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                if (isOwner)
-                  _OwnerActions(reportId: report.id)
-                else
-                  _ActionButtons(reportId: report.id),
+                if (!isOwner) ...[
+                  const SizedBox(height: 4),
+                  _ReportContentButton(report: report),
+                ],
+                if (isOwner) ...[
+                  const SizedBox(height: 4),
+                  _OwnerActions(reportId: report.id),
+                ],
               ],
-            );
-          },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+Future<void> _shareReport(BuildContext context, ParkingReport report) async {
+  final buffer = StringBuffer()
+    ..writeln('ParkGözcü Bildirimi')
+    ..writeln('Tür: ${report.type.label}')
+    ..writeln('Oluşturan: ${report.userName}')
+    ..writeln(
+      'Konum: ${report.address.isEmpty ? 'Belirtilmemiş' : report.address}',
+    )
+    ..writeln(
+      'Açıklama: ${report.description.isEmpty ? 'Yok' : report.description}',
+    );
+
+  await Share.share(buffer.toString().trim());
+}
+
+class _CreatorLink extends StatelessWidget {
+  const _CreatorLink({required this.report});
+
+  final ParkingReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.red.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => UserPublicProfilePage(
+                userId: report.userId,
+                userName: report.userName,
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.person_outline, color: AppColors.red),
+              const SizedBox(width: 10),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.darkGrey,
+                        ),
+                    children: [
+                      const TextSpan(
+                        text: 'Oluşturan Kişi: ',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      TextSpan(
+                        text: report.userName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.mediumGrey),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReportStatusInfo extends StatelessWidget {
+  const _ReportStatusInfo({required this.report});
+
+  final ParkingReport report;
+
+  String get _statusText {
+    return switch (report.type) {
+      ReportType.parkingFine =>
+        'Bu noktada park cezası uygulandığı bildirildi.',
+      ReportType.towedVehicle => 'Bu noktada araç çekildiği bildirildi.',
+      ReportType.noParking => 'Bu noktada park yasağı olduğu bildirildi.',
+      ReportType.heavyInspection =>
+        'Bu noktada yoğun denetim olduğu bildirildi.',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(report.type.icon, color: report.type.color, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                report.type.label,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(_statusText),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportContentButton extends StatelessWidget {
+  const _ReportContentButton({required this.report});
+
+  final ParkingReport report;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.red.shade700,
+        side: BorderSide(color: Colors.red.shade700),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+      ),
+      onPressed: () {
+        if (auth.isGuest) {
+          _ActionButtons.showGuestSignInDialog(context, auth);
+          return;
+        }
+        showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          builder: (_) => _ContentReportSheet(report: report),
+        );
+      },
+      icon: const Icon(Icons.flag_outlined),
+      label: const Text('Rapor Et'),
+    );
+  }
+}
+
+class _ContentReportSheet extends StatefulWidget {
+  const _ContentReportSheet({required this.report});
+
+  final ParkingReport report;
+
+  @override
+  State<_ContentReportSheet> createState() => _ContentReportSheetState();
+}
+
+class _ContentReportSheetState extends State<_ContentReportSheet> {
+  ContentReportReason? _selectedReason;
+  final _detailController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _detailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final reason = _selectedReason;
+    if (reason == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rapor nedenini seçmelisin.')),
+      );
+      return;
+    }
+
+    if (reason == ContentReportReason.other &&
+        _detailController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Diğer seçeneği için açıklama yazmalısın.')),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthController>();
+    final user = auth.user;
+    if (user == null || auth.isGuest) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await context.read<ReportController>().submitContentReport(
+            report: widget.report,
+            reporterId: user.id,
+            reporterName: user.name,
+            reason: reason,
+            detail: _detailController.text.trim(),
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Raporun alındı. İnceleme için teşekkürler.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rapor gönderilemedi. Tekrar dene.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Neden rapor ediyorsunuz?',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 12),
+          ...ContentReportReason.values.map(
+            (reason) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              onTap: _isSubmitting
+                  ? null
+                  : () => setState(() => _selectedReason = reason),
+              title: Text(reason.label),
+              trailing: Icon(
+                _selectedReason == reason
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                color: _selectedReason == reason
+                    ? AppColors.red
+                    : AppColors.mediumGrey,
+              ),
+            ),
+          ),
+          if (_selectedReason == ContentReportReason.other) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _detailController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Açıklama',
+                hintText: 'Rapor nedenini kısaca yaz',
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _isSubmitting ? null : _submit,
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Raporu gönder'),
+          ),
+        ],
       ),
     );
   }
@@ -635,6 +965,13 @@ class _ActionButtons extends StatelessWidget {
   }
 
   void _showGuestSignInDialog(BuildContext context, AuthController auth) {
+    showGuestSignInDialog(context, auth);
+  }
+
+  static void showGuestSignInDialog(
+    BuildContext context,
+    AuthController auth,
+  ) {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/kilometer_formatter.dart';
+import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/maintenance_note_storage.dart';
 import '../domain/maintenance_note.dart';
@@ -29,197 +33,97 @@ class _AutoCarePageState extends State<AutoCarePage> {
 
   List<MaintenanceNote> _notes = [];
   bool _isLoading = true;
+  String? _loadedUserId;
 
   @override
-  void initState() {
-    super.initState();
-    _loadNotes();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final userId = context.watch<AuthController>().user?.id;
+    unawaited(_ensureNotesLoaded(userId));
   }
 
-  Future<void> _loadNotes() async {
-    final userId = context.read<AuthController>().user?.id;
+  Future<void> _ensureNotesLoaded(String? userId) async {
     if (userId == null || userId == 'demo-guest') {
+      if (!mounted) return;
       setState(() {
+        _loadedUserId = userId;
         _notes = const [];
         _isLoading = false;
       });
       return;
     }
 
-    final notes = await _storage.loadNotes(userId);
-    notes.sort((a, b) => b.date.compareTo(a.date));
-    if (!mounted) return;
-    setState(() {
-      _notes = notes;
-      _isLoading = false;
-    });
+    if (_loadedUserId == userId && !_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final notes = await _storage.loadNotes(userId);
+      notes.sort((a, b) => b.date.compareTo(a.date));
+      if (!mounted) return;
+      setState(() {
+        _loadedUserId = userId;
+        _notes = notes;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadedUserId = userId;
+        _notes = const [];
+        _isLoading = false;
+      });
+    }
   }
 
-  Future<void> _persistNotes() async {
+  Future<bool> _persistNotes() async {
     final userId = context.read<AuthController>().user?.id;
-    if (userId == null || userId == 'demo-guest') return;
-    await _storage.saveNotes(userId, _notes);
+    if (userId == null || userId == 'demo-guest') return false;
+
+    try {
+      await _storage.saveNotes(userId, _notes);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not kaydedilemedi. Tekrar dene.')),
+        );
+      }
+      return false;
+    }
   }
 
   Future<void> _openNoteEditor({MaintenanceNote? note}) async {
-    final titleController = TextEditingController(text: note?.title ?? '');
-    final descriptionController =
-        TextEditingController(text: note?.description ?? '');
-    final kilometerController = TextEditingController(
-      text: note?.kilometer?.toString() ?? '',
-    );
-    var selectedCategory = note?.category ?? _categories.first;
-    var selectedDate = note?.date ?? DateTime.now();
-
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 8,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-          ),
-          child: StatefulBuilder(
-            builder: (context, setSheetState) {
-              return SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      note == null ? 'Bakım notu ekle' : 'Bakım notunu düzenle',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Başlık',
-                        hintText: 'Örn: Yağ değişimi',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Kategori'),
-                      items: _categories
-                          .map(
-                            (category) => DropdownMenuItem(
-                              value: category,
-                              child: Text(category),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setSheetState(() => selectedCategory = value);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Tarih'),
-                      subtitle: Text(_dateFormat.format(selectedDate)),
-                      trailing: const Icon(Icons.calendar_month),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2010),
-                          lastDate:
-                              DateTime.now().add(const Duration(days: 365 * 3)),
-                          locale: const Locale('tr', 'TR'),
-                        );
-                        if (picked != null) {
-                          setSheetState(() => selectedDate = picked);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: kilometerController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Kilometre (isteğe bağlı)',
-                        hintText: 'Örn: 84500',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descriptionController,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'Not',
-                        hintText:
-                            'Servis detayı, hatırlatma veya masraf bilgisi',
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: () {
-                        if (titleController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Başlık girmelisin.')),
-                          );
-                          return;
-                        }
-                        Navigator.of(context).pop(true);
-                      },
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text(note == null
-                          ? 'Notu kaydet'
-                          : 'Değişiklikleri kaydet'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+    final savedNote = await Navigator.of(context).push<MaintenanceNote>(
+      MaterialPageRoute(
+        builder: (_) => MaintenanceNoteEditorPage(
+          note: note,
+          categories: _categories,
+        ),
+      ),
     );
 
-    if (saved != true || !mounted) {
-      titleController.dispose();
-      descriptionController.dispose();
-      kilometerController.dispose();
-      return;
-    }
-
-    final kilometerText = kilometerController.text.trim();
-    final kilometer =
-        kilometerText.isEmpty ? null : int.tryParse(kilometerText);
-    final updatedNote = MaintenanceNote(
-      id: note?.id ?? const Uuid().v4(),
-      title: titleController.text.trim(),
-      category: selectedCategory,
-      date: selectedDate,
-      description: descriptionController.text.trim(),
-      kilometer: kilometer,
-    );
-
-    titleController.dispose();
-    descriptionController.dispose();
-    kilometerController.dispose();
+    if (savedNote == null || !mounted) return;
 
     setState(() {
       if (note == null) {
-        _notes = [updatedNote, ..._notes];
+        _notes = [savedNote, ..._notes];
       } else {
         _notes = _notes
-            .map((item) => item.id == note.id ? updatedNote : item)
+            .map((item) => item.id == note.id ? savedNote : item)
             .toList();
       }
       _notes.sort((a, b) => b.date.compareTo(a.date));
     });
-    await _persistNotes();
+
+    final persisted = await _persistNotes();
+    if (persisted && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                note == null ? 'Bakım notu kaydedildi.' : 'Not güncellendi.')),
+      );
+    }
   }
 
   Future<void> _deleteNote(MaintenanceNote note) async {
@@ -295,9 +199,14 @@ class _AutoCarePageState extends State<AutoCarePage> {
                               children: [
                                 const SizedBox(height: 4),
                                 Text(
-                                    '${note.category} • ${_dateFormat.format(note.date)}'),
+                                  '${note.category} • ${_dateFormat.format(note.date)}',
+                                ),
                                 if (note.kilometer != null)
-                                  Text('${note.kilometer} km'),
+                                  Text(
+                                    KilometerFormatter.formatForDisplay(
+                                      note.kilometer!,
+                                    ),
+                                  ),
                                 if (note.description.isNotEmpty) ...[
                                   const SizedBox(height: 6),
                                   Text(
@@ -319,9 +228,13 @@ class _AutoCarePageState extends State<AutoCarePage> {
                               },
                               itemBuilder: (context) => const [
                                 PopupMenuItem(
-                                    value: 'edit', child: Text('Düzenle')),
+                                  value: 'edit',
+                                  child: Text('Düzenle'),
+                                ),
                                 PopupMenuItem(
-                                    value: 'delete', child: Text('Sil')),
+                                  value: 'delete',
+                                  child: Text('Sil'),
+                                ),
                               ],
                             ),
                             onTap: () => _openNoteEditor(note: note),
@@ -340,6 +253,228 @@ class _AutoCarePageState extends State<AutoCarePage> {
       'Servis' => Icons.car_repair,
       _ => Icons.note_alt_outlined,
     };
+  }
+}
+
+class MaintenanceNoteEditorPage extends StatefulWidget {
+  const MaintenanceNoteEditorPage({
+    super.key,
+    this.note,
+    required this.categories,
+  });
+
+  final MaintenanceNote? note;
+  final List<String> categories;
+
+  @override
+  State<MaintenanceNoteEditorPage> createState() =>
+      _MaintenanceNoteEditorPageState();
+}
+
+class _MaintenanceNoteEditorPageState extends State<MaintenanceNoteEditorPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _kilometerController = TextEditingController();
+  final _dateFormat = DateFormat.yMMMd('tr_TR');
+
+  late String _selectedCategory;
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategory = widget.note?.category ?? widget.categories.first;
+    _selectedDate = widget.note?.date ?? DateTime.now();
+    _titleController.text = widget.note?.title ?? '';
+    _descriptionController.text = widget.note?.description ?? '';
+    _kilometerController.text =
+        KilometerFormatter.formatForInput(widget.note?.kilometer);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _kilometerController.dispose();
+    super.dispose();
+  }
+
+  void _closeKeyboard() {
+    FocusScope.of(context).unfocus();
+  }
+
+  void _save() {
+    _closeKeyboard();
+    if (!_formKey.currentState!.validate()) return;
+
+    final note = MaintenanceNote(
+      id: widget.note?.id ?? const Uuid().v4(),
+      title: _titleController.text.trim(),
+      category: _selectedCategory,
+      date: _selectedDate,
+      description: _descriptionController.text.trim(),
+      kilometer: KilometerFormatter.parse(_kilometerController.text),
+    );
+
+    Navigator.of(context).pop(note);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.note != null;
+
+    return EdgeSwipeBack(
+      child: GestureDetector(
+        onTap: _closeKeyboard,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(isEditing ? 'Notu düzenle' : 'Bakım notu ekle'),
+            actions: [
+              TextButton(
+                onPressed: _save,
+                child: const Text('Kaydet'),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Bakım bilgileri',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _titleController,
+                              textInputAction: TextInputAction.next,
+                              decoration: const InputDecoration(
+                                labelText: 'Başlık',
+                                hintText: 'Örn: Yağ değişimi',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Başlık girmelisin.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              value: _selectedCategory,
+                              decoration:
+                                  const InputDecoration(labelText: 'Kategori'),
+                              items: widget.categories
+                                  .map(
+                                    (category) => DropdownMenuItem(
+                                      value: category,
+                                      child: Text(category),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => _selectedCategory = value);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () async {
+                                _closeKeyboard();
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2010),
+                                  lastDate: DateTime.now()
+                                      .add(const Duration(days: 365 * 3)),
+                                  locale: const Locale('tr', 'TR'),
+                                );
+                                if (picked != null) {
+                                  setState(() => _selectedDate = picked);
+                                }
+                              },
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Tarih',
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _dateFormat.format(_selectedDate),
+                                      ),
+                                    ),
+                                    const Icon(Icons.calendar_month),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _kilometerController,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [KilometerInputFormatter()],
+                              decoration: const InputDecoration(
+                                labelText: 'Kilometre (isteğe bağlı)',
+                                hintText: 'Örn: 150.000',
+                                suffixText: 'KM',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: TextFormField(
+                          controller: _descriptionController,
+                          minLines: 4,
+                          maxLines: 6,
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _closeKeyboard(),
+                          decoration: const InputDecoration(
+                            labelText: 'Not',
+                            hintText:
+                                'Servis detayı, hatırlatma veya masraf bilgisi',
+                            alignLabelWithHint: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _save,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(
+                          isEditing ? 'Değişiklikleri kaydet' : 'Notu kaydet'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
