@@ -32,11 +32,9 @@ class ProfileAwareShell extends StatelessWidget {
           ProfilePage(),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: _ModernBottomNav(
-          selectedIndex: shell.selectedIndex,
-          onSelected: shell.selectTab,
-        ),
+      bottomNavigationBar: _ModernBottomNav(
+        selectedIndex: shell.selectedIndex,
+        onSelected: shell.selectTab,
       ),
     );
   }
@@ -60,25 +58,43 @@ class _ModernBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(26),
-      ),
-      child: Row(
-        children: [
-          for (var index = 0; index < _items.length; index++)
-            Expanded(
-              child: _ModernNavItem(
-                icon: _items[index].icon,
-                label: _items[index].label,
-                isSelected: selectedIndex == index,
-                onTap: () => onSelected(index),
-              ),
-            ),
+        color: isDark ? const Color(0xFF101A10) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, -6),
+          ),
         ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+          child: Row(
+            children: [
+              for (var index = 0; index < _items.length; index++)
+                Expanded(
+                  child: _ModernNavItem(
+                    icon: _items[index].icon,
+                    label: _items[index].label,
+                    isSelected: selectedIndex == index,
+                    onTap: () => onSelected(index),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -99,22 +115,32 @@ class _ModernNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inactiveColor =
+        isDark ? const Color(0xFFB6C3B6) : AppColors.mediumGrey;
+
     return InkWell(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(18),
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.red.withValues(alpha: isDark ? 0.18 : 0.10)
+              : null,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
               size: 22,
-              color: isSelected ? AppColors.red : AppColors.mediumGrey,
+              color: isSelected ? AppColors.red : inactiveColor,
             ),
             const SizedBox(height: 3),
             Text(
@@ -124,7 +150,7 @@ class _ModernNavItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppColors.red : AppColors.mediumGrey,
+                color: isSelected ? AppColors.red : inactiveColor,
               ),
             ),
           ],
@@ -152,7 +178,8 @@ class ParkAreaPage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     backgroundColor: AppColors.red.withValues(alpha: 0.15),
-                    child: const Icon(Icons.local_parking, color: AppColors.red),
+                    child:
+                        const Icon(Icons.local_parking, color: AppColors.red),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -218,7 +245,8 @@ class AutoCarePage extends StatelessWidget {
                 child: Icon(Icons.build, color: Colors.white),
               ),
               title: const Text('Yakında'),
-              subtitle: const Text('Bakım geçmişi ve servis önerileri eklenecek.'),
+              subtitle:
+                  const Text('Bakım geçmişi ve servis önerileri eklenecek.'),
               trailing: Icon(Icons.chevron_right, color: AppColors.mediumGrey),
             ),
           ),
@@ -313,7 +341,8 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 16),
           Card(
             child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
               leading: const CircleAvatar(
                 backgroundColor: AppColors.red,
                 child: Icon(Icons.history, color: Colors.white),
@@ -356,7 +385,8 @@ class _GuestProfileGate extends StatelessWidget {
                   CircleAvatar(
                     radius: 38,
                     backgroundColor: AppColors.red.withValues(alpha: 0.14),
-                    child: const Icon(Icons.lock_outline, color: AppColors.red, size: 36),
+                    child: const Icon(Icons.lock_outline,
+                        color: AppColors.red, size: 36),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -408,73 +438,73 @@ class _UserReportsPageState extends State<UserReportsPage> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Geçmiş bildirimlerim')),
         body: StreamBuilder<List<ParkingReport>>(
-        stream: reports.watchUserReports(widget.userId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          stream: reports.watchUserReports(widget.userId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final allReports = snapshot.data ?? const <ParkingReport>[];
-          if (allReports.isEmpty) {
-            return const Center(child: Text('Henüz bildirim oluşturmadın.'));
-          }
+            final allReports = snapshot.data ?? const <ParkingReport>[];
+            if (allReports.isEmpty) {
+              return const Center(child: Text('Henüz bildirim oluşturmadın.'));
+            }
 
-          final pageCount = (allReports.length / _pageSize).ceil();
-          final safePage = _page.clamp(0, pageCount - 1);
-          if (safePage != _page) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() => _page = safePage);
-            });
-          }
-          final start = safePage * _pageSize;
-          final end = (start + _pageSize).clamp(0, allReports.length);
-          final visibleReports = allReports.sublist(start, end);
+            final pageCount = (allReports.length / _pageSize).ceil();
+            final safePage = _page.clamp(0, pageCount - 1);
+            if (safePage != _page) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _page = safePage);
+              });
+            }
+            final start = safePage * _pageSize;
+            final end = (start + _pageSize).clamp(0, allReports.length);
+            final visibleReports = allReports.sublist(start, end);
 
-          return Column(
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: visibleReports.length,
-                  itemBuilder: (context, index) {
-                    return _ReportHistoryCard(report: visibleReports[index]);
-                  },
-                ),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: safePage == 0
-                              ? null
-                              : () => setState(() => _page--),
-                          icon: const Icon(Icons.chevron_left),
-                          label: const Text('Önceki'),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Text('${safePage + 1} / $pageCount'),
-                      ),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: safePage >= pageCount - 1
-                              ? null
-                              : () => setState(() => _page++),
-                          icon: const Icon(Icons.chevron_right),
-                          label: const Text('Sonraki'),
-                        ),
-                      ),
-                    ],
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: visibleReports.length,
+                    itemBuilder: (context, index) {
+                      return _ReportHistoryCard(report: visibleReports[index]);
+                    },
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: safePage == 0
+                                ? null
+                                : () => setState(() => _page--),
+                            icon: const Icon(Icons.chevron_left),
+                            label: const Text('Önceki'),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Text('${safePage + 1} / $pageCount'),
+                        ),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: safePage >= pageCount - 1
+                                ? null
+                                : () => setState(() => _page++),
+                            icon: const Icon(Icons.chevron_right),
+                            label: const Text('Sonraki'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -671,7 +701,10 @@ class _InfoTextPage extends StatelessWidget {
                 padding: const EdgeInsets.all(18),
                 child: Text(
                   body,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyLarge
+                      ?.copyWith(height: 1.45),
                 ),
               ),
             ),
@@ -694,7 +727,8 @@ class _ReportHistoryCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => ReportDetailPage(reportId: report.id)),
+          MaterialPageRoute(
+              builder: (_) => ReportDetailPage(reportId: report.id)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -709,7 +743,8 @@ class _ReportHistoryCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(report.type.icon, color: report.type.color, size: 18),
+                        Icon(report.type.icon,
+                            color: report.type.color, size: 18),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -738,8 +773,11 @@ class _ReportHistoryCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 8),
                     Text(
-                      DateFormat.yMMMd('tr_TR').add_Hm().format(report.createdAt),
-                      style: const TextStyle(fontSize: 12, color: AppColors.mediumGrey),
+                      DateFormat.yMMMd('tr_TR')
+                          .add_Hm()
+                          .format(report.createdAt),
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.mediumGrey),
                     ),
                   ],
                 ),
@@ -770,7 +808,8 @@ class _ReportPhotoPreview extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.red.withValues(alpha: 0.18)),
         ),
-        child: const Icon(Icons.image_not_supported_outlined, color: AppColors.mediumGrey),
+        child: const Icon(Icons.image_not_supported_outlined,
+            color: AppColors.mediumGrey),
       );
     }
 
@@ -797,7 +836,8 @@ class _ReportPhotoPreview extends StatelessWidget {
                 width: 76,
                 height: 76,
                 color: AppColors.lightGrey,
-                child: const Icon(Icons.broken_image, color: AppColors.mediumGrey),
+                child:
+                    const Icon(Icons.broken_image, color: AppColors.mediumGrey),
               ),
             ),
     );
@@ -848,7 +888,8 @@ class _ProfileHeroCard extends StatelessWidget {
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.55), width: 2),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.55), width: 2),
             ),
             child: CircleAvatar(
               radius: 36,
@@ -885,7 +926,8 @@ class _ProfileHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(16),

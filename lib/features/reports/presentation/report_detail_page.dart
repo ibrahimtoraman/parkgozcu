@@ -27,79 +27,87 @@ class ReportDetailPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(title: const Text('Bildirim Detayı')),
         body: StreamBuilder<ParkingReport>(
-        stream: controller.watchReport(reportId),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          stream: controller.watchReport(reportId),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final report = snapshot.data!;
-          final auth = context.watch<AuthController>();
-          final currentUserId = auth.user?.id;
-          final isOwner = currentUserId == report.userId;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _ImageGallery(urls: report.imageUrls),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: report.type.color.withValues(alpha: 0.15),
-                    child: Icon(report.type.icon, color: report.type.color),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          report.type.label,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        Text(DateFormat.yMMMMd('tr_TR').add_Hm().format(report.createdAt)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (report.address.isNotEmpty)
-                _InfoCard(
-                  title: 'Konum Bilgisi',
-                  child: _LocationInfo(report: report),
-                ),
-              _InfoCard(
-                title: 'Açıklama',
-                child: Text(
-                  report.description.isEmpty
-                      ? 'Bu bildirim için açıklama eklenmemiş.'
-                      : report.description,
-                ),
-              ),
-              _InfoCard(
-                title: 'Oluşturan',
-                child: Text(report.userName),
-              ),
-              _InfoCard(
-                title: 'Topluluk doğrulaması',
-                child: Row(
+            final report = snapshot.data!;
+            final auth = context.watch<AuthController>();
+            final currentUserId = auth.user?.id;
+            final isOwner = currentUserId == report.userId;
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _ImageGallery(urls: report.imageUrls),
+                const SizedBox(height: 16),
+                Row(
                   children: [
-                    Expanded(child: Text('${report.verifyCount} doğrulama')),
-                    Expanded(child: Text('${report.falseReportCount} yanlış bilgi bildirimi')),
+                    CircleAvatar(
+                      backgroundColor:
+                          report.type.color.withValues(alpha: 0.15),
+                      child: Icon(report.type.icon, color: report.type.color),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            report.type.label,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          Text(DateFormat.yMMMMd('tr_TR')
+                              .add_Hm()
+                              .format(report.createdAt)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              if (isOwner)
-                _OwnerActions(reportId: report.id)
-              else
-                _ActionButtons(reportId: report.id),
-            ],
-          );
-        },
+                const SizedBox(height: 16),
+                if (report.address.isNotEmpty)
+                  _InfoCard(
+                    title: 'Konum Bilgisi',
+                    child: _LocationInfo(report: report),
+                  ),
+                _InfoCard(
+                  title: 'Açıklama',
+                  child: Text(
+                    report.description.isEmpty
+                        ? 'Bu bildirim için açıklama eklenmemiş.'
+                        : report.description,
+                  ),
+                ),
+                _InfoCard(
+                  title: 'Oluşturan',
+                  child: Text(report.userName),
+                ),
+                _InfoCard(
+                  title: 'Topluluk doğrulaması',
+                  child: Row(
+                    children: [
+                      Expanded(child: Text('${report.verifyCount} doğrulama')),
+                      Expanded(
+                          child: Text(
+                              '${report.falseReportCount} yanlış bilgi bildirimi')),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (isOwner)
+                  _OwnerActions(reportId: report.id)
+                else
+                  _ActionButtons(reportId: report.id),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -191,7 +199,8 @@ class _ImageGalleryState extends State<_ImageGallery> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   child: Text(
                     '${_index + 1} / ${urls.length}',
                     style: const TextStyle(
@@ -217,7 +226,8 @@ class _ImageGalleryState extends State<_ImageGallery> {
               bottom: 0,
               child: _GalleryArrow(
                 icon: Icons.chevron_right,
-                onTap: _index >= urls.length - 1 ? null : () => _goTo(_index + 1),
+                onTap:
+                    _index >= urls.length - 1 ? null : () => _goTo(_index + 1),
               ),
             ),
           ],
@@ -262,6 +272,8 @@ class _PhotoPreviewDialog extends StatefulWidget {
 class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
   late final PageController _controller;
   late int _index;
+  double _verticalDrag = 0;
+  bool _dismissedByDrag = false;
 
   @override
   void initState() {
@@ -280,77 +292,101 @@ class _PhotoPreviewDialogState extends State<_PhotoPreviewDialog> {
   Widget build(BuildContext context) {
     return Dialog.fullscreen(
       backgroundColor: Colors.black,
-      child: Stack(
-        children: [
-          PageView.builder(
-            controller: _controller,
-            itemCount: widget.urls.length,
-            onPageChanged: (value) => setState(() => _index = value),
-            itemBuilder: (context, index) {
-              return Center(
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4,
-                  child: _ReportPhoto(
-                    source: widget.urls[index],
-                    fit: BoxFit.contain,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onVerticalDragUpdate: (details) {
+          if (details.delta.dy <= 0) return;
+          _verticalDrag += details.delta.dy;
+          if (_verticalDrag > 120 && !_dismissedByDrag) {
+            _dismissedByDrag = true;
+            Navigator.of(context).pop();
+          }
+        },
+        onVerticalDragEnd: (details) {
+          if (details.primaryVelocity != null &&
+              details.primaryVelocity! > 700 &&
+              !_dismissedByDrag) {
+            _dismissedByDrag = true;
+            Navigator.of(context).pop();
+          }
+          _verticalDrag = 0;
+        },
+        onVerticalDragCancel: () => _verticalDrag = 0,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _controller,
+              itemCount: widget.urls.length,
+              onPageChanged: (value) => setState(() => _index = value),
+              itemBuilder: (context, index) {
+                return Center(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4,
+                    child: _ReportPhoto(
+                      source: widget.urls[index],
+                      fit: BoxFit.contain,
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-          if (widget.urls.length > 1) ...[
-            Positioned(
-              top: 42,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(
-                      '${_index + 1} / ${widget.urls.length}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
+                );
+              },
+            ),
+            if (widget.urls.length > 1) ...[
+              Positioned(
+                top: 42,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      child: Text(
+                        '${_index + 1} / ${widget.urls.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 12,
-              top: 0,
-              bottom: 0,
-              child: _GalleryArrow(
-                icon: Icons.chevron_left,
-                onTap: _index == 0 ? null : () => _goTo(_index - 1),
+              Positioned(
+                left: 12,
+                top: 0,
+                bottom: 0,
+                child: _GalleryArrow(
+                  icon: Icons.chevron_left,
+                  onTap: _index == 0 ? null : () => _goTo(_index - 1),
+                ),
               ),
-            ),
+              Positioned(
+                right: 12,
+                top: 0,
+                bottom: 0,
+                child: _GalleryArrow(
+                  icon: Icons.chevron_right,
+                  onTap: _index >= widget.urls.length - 1
+                      ? null
+                      : () => _goTo(_index + 1),
+                ),
+              ),
+            ],
             Positioned(
+              top: 36,
               right: 12,
-              top: 0,
-              bottom: 0,
-              child: _GalleryArrow(
-                icon: Icons.chevron_right,
-                onTap: _index >= widget.urls.length - 1 ? null : () => _goTo(_index + 1),
+              child: IconButton.filled(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
               ),
             ),
           ],
-          Positioned(
-            top: 36,
-            right: 12,
-            child: IconButton.filled(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.close),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -653,12 +689,16 @@ class _VoteButton extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         style: OutlinedButton.styleFrom(
-          backgroundColor: isSelected ? AppColors.red.withValues(alpha: 0.10) : null,
+          backgroundColor:
+              isSelected ? AppColors.red.withValues(alpha: 0.10) : null,
           foregroundColor: isSelected ? AppColors.red : AppColors.darkGrey,
           side: BorderSide(
-            color: isSelected ? AppColors.red : AppColors.mediumGrey.withValues(alpha: 0.32),
+            color: isSelected
+                ? AppColors.red
+                : AppColors.mediumGrey.withValues(alpha: 0.32),
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
     );
