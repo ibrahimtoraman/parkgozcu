@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
+import '../../profile/domain/user_trust_profile.dart';
 
 class ReportFilters {
   const ReportFilters({this.type, this.days});
@@ -318,6 +319,36 @@ class ReportRepository {
               .where((doc) => (doc.data()['falseReportCount'] as int? ?? 0) > 0)
               .length,
         );
+  }
+
+  Stream<UserTrustProfile> watchUserTrustProfile(String userId) {
+    return _firestore
+        .collection('Reports')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final reports = snapshot.docs
+          .map((doc) => ParkingReport.fromMap(doc.id, doc.data()))
+          .toList();
+      final userDoc = await _firestore.collection('Users').doc(userId).get();
+      final score = userDoc.data()?['score'] as int? ?? 0;
+      final verifiedReportCount =
+          reports.where((report) => report.verifyCount > 0).length;
+      final totalVerifications = reports.fold<int>(
+        0,
+        (sum, report) => sum + report.verifyCount,
+      );
+      final falseFlaggedReports =
+          reports.where((report) => report.falseReportCount > 0).length;
+
+      return UserTrustProfile.fromData(
+        totalReports: reports.length,
+        verifiedReportCount: verifiedReportCount,
+        totalVerificationsReceived: totalVerifications,
+        falseFlaggedReports: falseFlaggedReports,
+        score: score,
+      );
+    });
   }
 
   Future<void> submitContentReport({

@@ -36,6 +36,14 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>parkgozcu</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
 				<string>com.googleusercontent.apps.439704193376-bl4sc61qksjh084ikp7u3rjdvta1d0la</string>
 			</array>
 		</dict>

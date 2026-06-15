@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import 'core/navigation/deep_link_handler.dart';
 import 'core/services/location_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/navigation/app_shell_controller.dart';
@@ -15,6 +16,8 @@ import 'features/auth/presentation/login_page.dart';
 import 'features/profile/presentation/profile_page.dart';
 import 'features/reports/data/report_repository.dart';
 import 'features/reports/presentation/report_controller.dart';
+
+final appNavigatorKey = GlobalKey<NavigatorState>();
 
 class ParkGozcuApp extends StatelessWidget {
   const ParkGozcuApp({super.key});
@@ -52,19 +55,23 @@ class ParkGozcuApp extends StatelessWidget {
           )..loadInitialLocation(),
         ),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'ParkGözcü',
-        theme: AppTheme.light,
-        themeMode: ThemeMode.light,
-        locale: const Locale('tr', 'TR'),
-        supportedLocales: const [Locale('tr', 'TR')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: const _AuthGate(),
+      child: DeepLinkHandler(
+        navigatorKey: appNavigatorKey,
+        child: MaterialApp(
+          navigatorKey: appNavigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: 'ParkGözcü',
+          theme: AppTheme.light,
+          themeMode: ThemeMode.light,
+          locale: const Locale('tr', 'TR'),
+          supportedLocales: const [Locale('tr', 'TR')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: const _AuthGate(),
+        ),
       ),
     );
   }

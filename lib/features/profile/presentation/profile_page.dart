@@ -16,6 +16,8 @@ import '../../reports/domain/entities/report.dart';
 import '../../reports/presentation/home_map_page.dart';
 import '../../reports/presentation/report_detail_page.dart';
 import '../../reports/presentation/report_controller.dart';
+import '../domain/user_trust_profile.dart';
+import 'widgets/user_trust_summary.dart';
 
 class ProfileAwareShell extends StatelessWidget {
   const ProfileAwareShell({super.key});
@@ -284,6 +286,14 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder<UserTrustProfile>(
+            stream: reports.watchUserTrustProfile(user.id),
+            builder: (context, snapshot) {
+              final profile = snapshot.data ?? UserTrustProfile.empty;
+              return UserTrustSummary(profile: profile, compact: true);
+            },
           ),
           const SizedBox(height: 16),
           Card(

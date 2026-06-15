@@ -9,9 +9,11 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/report_share_text.dart';
 import '../../../core/navigation/app_shell_controller.dart';
 import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../auth/domain/entities/app_user.dart';
 import '../../profile/presentation/user_public_profile_page.dart';
 import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
@@ -199,22 +201,11 @@ class ReportDetailPage extends StatelessWidget {
 }
 
 Future<void> _shareReport(BuildContext context, ParkingReport report) async {
-  final buffer = StringBuffer()
-    ..writeln('ParkGözcü Bildirimi')
-    ..writeln('Tür: ${report.type.label}')
-    ..writeln('Oluşturan: ${report.userName}')
-    ..writeln(
-      'Konum: ${report.address.isEmpty ? 'Belirtilmemiş' : report.address}',
-    )
-    ..writeln(
-      'Açıklama: ${report.description.isEmpty ? 'Yok' : report.description}',
-    );
-
   final box = context.findRenderObject() as RenderBox?;
   final origin = box == null ? null : box.localToGlobal(Offset.zero) & box.size;
 
   await Share.share(
-    buffer.toString().trim(),
+    ReportShareText.build(report),
     sharePositionOrigin: origin,
   );
 }
@@ -248,8 +239,14 @@ class _CreatorLink extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => UserPublicProfilePage(
-                userId: report.userId,
-                userName: displayName,
+                user: AppUser(
+                  id: report.userId,
+                  name: displayName,
+                  email: '',
+                  photoUrl: '',
+                  score: 0,
+                  createdAt: DateTime.now(),
+                ),
               ),
             ),
           );

@@ -9,6 +9,7 @@ import '../../../core/services/location_service.dart';
 import '../data/report_repository.dart';
 import '../domain/entities/content_report_reason.dart';
 import '../domain/entities/report.dart';
+import '../../profile/domain/user_trust_profile.dart';
 
 class ReportController extends ChangeNotifier {
   ReportController({
@@ -126,6 +127,10 @@ class ReportController extends ChangeNotifier {
 
   Stream<int> watchFalseFlaggedUserReportCount(String userId) {
     return _repository.watchFalseFlaggedUserReportCount(userId);
+  }
+
+  Stream<UserTrustProfile> watchUserTrustProfile(String userId) {
+    return _repository.watchUserTrustProfile(userId);
   }
 
   Future<void> submitContentReport({
