@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "ParkGözcü";
+"CFBundleName" = "ParkGözcü";
+"NSCameraUsageDescription" = "Bildirim oluştururken fotoğraf çekebilmen için kamera erişimi gerekiyor.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Haritadaki bildirimleri konumuna göre göstermek ve bildirim konumunu daha doğru seçebilmek için konum erişimi gerekiyor.";
+"NSLocationWhenInUseUsageDescription" = "Haritada konumunu göstermek ve bildirim konumunu seçmek için konum erişimi gerekiyor.";
+"NSPhotoLibraryUsageDescription" = "Bildirimlerine galeriden fotoğraf ekleyebilmen için fotoğraf erişimi gerekiyor.";
