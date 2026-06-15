@@ -29,3 +29,31 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
+
+  ios-adhoc:
+    name: iOS Ad Hoc Test
+    integrations:
+      app_store_connect: ParkGozcuKey
+    environment:
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.ibrahim.parkgozcu
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Get dependencies
+        script: |
+          flutter pub get
+      - name: Install pods
+        script: |
+          cd ios
+          pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+      - name: Build Ad Hoc IPA
+        script: |
+          flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
