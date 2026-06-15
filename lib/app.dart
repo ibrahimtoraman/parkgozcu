@@ -9,7 +9,6 @@ import 'core/services/location_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/navigation/app_shell_controller.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/theme_controller.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
@@ -26,7 +25,6 @@ class ParkGozcuApp extends StatelessWidget {
       providers: [
         Provider(create: (_) => LocationService()),
         Provider(create: (_) => NotificationService()),
-        ChangeNotifierProvider(create: (_) => ThemeController()),
         ChangeNotifierProvider(create: (_) => AppShellController()),
         Provider(
           create: (_) => AuthRepository(
@@ -54,24 +52,19 @@ class ParkGozcuApp extends StatelessWidget {
           )..loadInitialLocation(),
         ),
       ],
-      child: Consumer<ThemeController>(
-        builder: (context, themeController, _) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'ParkGözcü',
-            theme: AppTheme.light,
-            darkTheme: AppTheme.dark,
-            themeMode: themeController.mode,
-            locale: const Locale('tr', 'TR'),
-            supportedLocales: const [Locale('tr', 'TR')],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: const _AuthGate(),
-          );
-        },
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'ParkGözcü',
+        theme: AppTheme.light,
+        themeMode: ThemeMode.light,
+        locale: const Locale('tr', 'TR'),
+        supportedLocales: const [Locale('tr', 'TR')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const _AuthGate(),
       ),
     );
   }

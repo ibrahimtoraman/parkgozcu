@@ -50,8 +50,8 @@ class _CreateReportPageState extends State<CreateReportPage> {
   void initState() {
     super.initState();
     _type = widget.initialType ?? ReportType.parkingFine;
-    _selectedPosition =
-        widget.initialPosition ?? context.read<ReportController>().currentPosition;
+    _selectedPosition = widget.initialPosition ??
+        context.read<ReportController>().currentPosition;
     _addressController.text = widget.initialAddress ?? '';
     if (_addressController.text.trim().isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -77,232 +77,239 @@ class _CreateReportPageState extends State<CreateReportPage> {
       child: Scaffold(
         appBar: AppBar(title: const Text('Bildirim Oluştur')),
         body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-        child: ListView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          children: [
-            _ReportTypeSelector(
-              selectedType: _type,
-              onChanged: (type) => setState(() => _type = type),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.red.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
+            children: [
+              _ReportTypeSelector(
+                selectedType: _type,
+                onChanged: (type) => setState(() => _type = type),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.touch_app, color: AppColors.red, size: 15),
-                  SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      'Konumu haritada dokunarak adres değiştirebilirsiniz.',
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.red.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.touch_app, color: AppColors.red, size: 15),
+                    SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        'Konumu haritada dokunarak adres değiştirebilirsiniz.',
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              height: 270,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: AppColors.red.withValues(alpha: 0.38),
-                  width: 1.6,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: StreamBuilder<List<ParkingReport>>(
-                  stream: reportController.reports,
-                  builder: (context, snapshot) {
-                    final existingReportMarkers = (snapshot.data ?? const <ParkingReport>[])
-                        .where((report) => report.id.isNotEmpty)
-                        .map(
-                              (report) {
-                                final isOwnReport = report.userId == currentUserId;
-                                final position = LatLng(report.latitude, report.longitude);
-                                return Marker(
-                                  markerId: MarkerId('existing-${report.id}'),
-                                  position: position,
-                                  icon: _reportMarkerIcon(
-                                    report,
-                                    isOwnReport: isOwnReport,
-                                  ),
-                                  onTap: () => _updateSelectedPosition(
-                                    position,
-                                    knownAddress: report.address,
-                                  ),
-                                  zIndexInt: isOwnReport ? 20 : 1,
-                                );
-                              },
-                            );
-
-                    return GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: _selectedPosition,
-                        zoom: 15,
-                      ),
-                      myLocationEnabled: true,
-                      zoomControlsEnabled: true,
-                      zoomGesturesEnabled: true,
-                      scrollGesturesEnabled: true,
-                      rotateGesturesEnabled: true,
-                      tiltGesturesEnabled: true,
-                      gestureRecognizers: {
-                        Factory<OneSequenceGestureRecognizer>(
-                          () => EagerGestureRecognizer(),
-                        ),
-                      },
-                      markers: {
-                        ...existingReportMarkers,
-                        Marker(
-                          markerId: const MarkerId('current-location'),
-                          position: currentPosition,
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            BitmapDescriptor.hueGreen,
-                          ),
-                          infoWindow: const InfoWindow(title: 'Konumum'),
-                          onTap: () => _updateSelectedPosition(currentPosition),
-                          zIndexInt: 1000,
-                        ),
-                        Marker(
-                          markerId: const MarkerId('selected-report-location'),
-                          position: _selectedPosition,
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            BitmapDescriptor.hueOrange,
-                          ),
-                          draggable: true,
-                          onDragEnd: _updateSelectedPosition,
-                          infoWindow: const InfoWindow(title: 'Seçilen konum'),
-                          zIndexInt: 999,
-                        ),
-                      },
-                      circles: {
-                        Circle(
-                          circleId: const CircleId('current-location-radius'),
-                          center: currentPosition,
-                          radius: 22,
-                          strokeWidth: 4,
-                          strokeColor: AppColors.red,
-                          fillColor: AppColors.red.withValues(alpha: 0.16),
-                        ),
-                      },
-                      onTap: _updateSelectedPosition,
-                    );
-                  },
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: AppColors.red.withValues(alpha: 0.35),
-                  width: 1.4,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, 6),
+              const SizedBox(height: 10),
+              Container(
+                height: 270,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: AppColors.red.withValues(alpha: 0.38),
+                    width: 1.6,
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.place, color: AppColors.red, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Seçilen adres',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: AppColors.red,
-                              fontWeight: FontWeight.w800,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: StreamBuilder<List<ParkingReport>>(
+                    stream: reportController.reports,
+                    builder: (context, snapshot) {
+                      final existingReportMarkers =
+                          (snapshot.data ?? const <ParkingReport>[])
+                              .where((report) => report.id.isNotEmpty)
+                              .map(
+                        (report) {
+                          final isOwnReport = report.userId == currentUserId;
+                          final position =
+                              LatLng(report.latitude, report.longitude);
+                          return Marker(
+                            markerId: MarkerId('existing-${report.id}'),
+                            position: position,
+                            icon: _reportMarkerIcon(
+                              report,
+                              isOwnReport: isOwnReport,
                             ),
-                      ),
-                      const Spacer(),
-                      if (_isResolvingAddress)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _resolveAddress(_selectedPosition),
-                          icon: const Icon(Icons.my_location),
-                          tooltip: 'Adresi yenile',
+                            onTap: () => _updateSelectedPosition(
+                              position,
+                              knownAddress: report.address,
+                            ),
+                            zIndexInt: isOwnReport ? 20 : 1,
+                          );
+                        },
+                      );
+
+                      return GoogleMap(
+                        initialCameraPosition: CameraPosition(
+                          target: _selectedPosition,
+                          zoom: 15,
                         ),
-                    ],
+                        myLocationEnabled: true,
+                        zoomControlsEnabled: true,
+                        zoomGesturesEnabled: true,
+                        scrollGesturesEnabled: true,
+                        rotateGesturesEnabled: true,
+                        tiltGesturesEnabled: true,
+                        gestureRecognizers: {
+                          Factory<OneSequenceGestureRecognizer>(
+                            () => EagerGestureRecognizer(),
+                          ),
+                        },
+                        markers: {
+                          ...existingReportMarkers,
+                          Marker(
+                            markerId: const MarkerId('current-location'),
+                            position: currentPosition,
+                            icon: BitmapDescriptor.defaultMarkerWithHue(
+                              BitmapDescriptor.hueGreen,
+                            ),
+                            infoWindow: const InfoWindow(title: 'Konumum'),
+                            onTap: () =>
+                                _updateSelectedPosition(currentPosition),
+                            zIndexInt: 1000,
+                          ),
+                          Marker(
+                            markerId:
+                                const MarkerId('selected-report-location'),
+                            position: _selectedPosition,
+                            icon: BitmapDescriptor.defaultMarkerWithHue(
+                              BitmapDescriptor.hueOrange,
+                            ),
+                            draggable: true,
+                            onDragEnd: _updateSelectedPosition,
+                            infoWindow:
+                                const InfoWindow(title: 'Seçilen konum'),
+                            zIndexInt: 999,
+                          ),
+                        },
+                        circles: {
+                          Circle(
+                            circleId: const CircleId('current-location-radius'),
+                            center: currentPosition,
+                            radius: 22,
+                            strokeWidth: 4,
+                            strokeColor: AppColors.red,
+                            fillColor: AppColors.red.withValues(alpha: 0.16),
+                          ),
+                        },
+                        onTap: _updateSelectedPosition,
+                      );
+                    },
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _addressController,
-                    minLines: 2,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Adres bilgisini buradan düzeltebilirsin.',
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.red.withValues(alpha: 0.35),
+                    width: 1.4,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.place, color: AppColors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Seçilen adres',
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    color: AppColors.red,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                        const Spacer(),
+                        if (_isResolvingAddress)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _resolveAddress(_selectedPosition),
+                            icon: const Icon(Icons.my_location),
+                            tooltip: 'Adresi yenile',
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _addressController,
+                      minLines: 2,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        hintText: 'Adres bilgisini buradan düzeltebilirsin.',
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _descriptionController,
-              minLines: 3,
-              maxLines: 5,
-              decoration: const InputDecoration(
-                labelText: 'Açıklama',
-                hintText: 'Örnek: Park yasak tabelası yoktu, aracım çekildi.',
+              const SizedBox(height: 14),
+              TextField(
+                controller: _descriptionController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'Açıklama',
+                  hintText: 'Örnek: Park yasak tabelası yoktu, aracım çekildi.',
+                ),
               ),
-            ),
-            const SizedBox(height: 14),
-            _ImagePickerRow(
-              images: _images,
-              onAdd: _showImageSourceSheet,
-              onRemove: _removeImage,
-            ),
-            const SizedBox(height: 22),
-            FilledButton.icon(
-              onPressed: reportController.isSubmitting ? null : _submit,
-              icon: reportController.isSubmitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.cloud_upload),
-              label: const Text('Bildirim yayınla'),
-            ),
-          ],
-        ),
+              const SizedBox(height: 14),
+              _ImagePickerRow(
+                images: _images,
+                onAdd: _showImageSourceSheet,
+                onRemove: _removeImage,
+              ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                onPressed: reportController.isSubmitting ? null : _submit,
+                icon: reportController.isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.cloud_upload),
+                label: const Text('Bildirim yayınla'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -406,7 +413,9 @@ class _CreateReportPageState extends State<CreateReportPage> {
     required bool isOwnReport,
   }) async {
     final color = isOwnReport ? Colors.deepPurple : type.color;
-    final label = isOwnReport ? 'Benim ${_shortReportLabel(type)}' : _shortReportLabel(type);
+    final label = isOwnReport
+        ? 'Benim ${_shortReportLabel(type)}'
+        : _shortReportLabel(type);
     const pixelRatio = 3.0;
     const width = 112.0;
     const height = 52.0;
@@ -549,7 +558,8 @@ class _CreateReportPageState extends State<CreateReportPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showGuestSignInDialog(AuthController auth) {
@@ -593,7 +603,8 @@ class _CreateReportPageState extends State<CreateReportPage> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Bildirim yayınlandı'),
-        content: const Text('Paylaşımın haritada toplulukla paylaşılmaya hazır.'),
+        content:
+            const Text('Paylaşımın haritada toplulukla paylaşılmaya hazır.'),
         actions: [
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -680,8 +691,9 @@ class _ReportTypeSelector extends StatelessWidget {
                           child: Text(
                             label,
                             style: TextStyle(
-                              fontWeight:
-                                  isSelected ? FontWeight.w800 : FontWeight.w600,
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
                             ),
                           ),
                         ),
@@ -689,7 +701,8 @@ class _ReportTypeSelector extends StatelessWidget {
                           isSelected
                               ? Icons.radio_button_checked
                               : Icons.radio_button_unchecked,
-                          color: isSelected ? AppColors.red : AppColors.mediumGrey,
+                          color:
+                              isSelected ? AppColors.red : AppColors.mediumGrey,
                         ),
                       ],
                     ),

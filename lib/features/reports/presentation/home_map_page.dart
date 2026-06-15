@@ -25,14 +25,23 @@ class HomeMapPage extends StatefulWidget {
 
 class _HomeMapPageState extends State<HomeMapPage> {
   static const _googleMapsApiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
+  static const _maxVisibleMarkers = 180;
 
   final _addressService = AddressService();
   GoogleMapController? _mapController;
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   Timer? _searchDebounce;
+  Timer? _markerRebuildDebounce;
+  StreamSubscription<List<ParkingReport>>? _reportsSubscription;
   final _reportIconCache = <String, BitmapDescriptor>{};
-  final _loadingReportIconKeys = <String>{};
+  List<ParkingReport> _allReports = const [];
+  Set<Marker> _cachedReportMarkers = {};
+  LatLngBounds? _visibleBounds;
+  bool _markerIconsReady = false;
+  bool _reportsLoading = true;
+  String? _reportsError;
+  String? _currentUserId;
   LatLng? _lastObservedCurrentPosition;
   LatLng? _selectedReportPosition;
   int _lastMapFocusRequestId = 0;
@@ -42,161 +51,282 @@ class _HomeMapPageState extends State<HomeMapPage> {
   String? _addressSearchError;
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_preloadMarkerIcons());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _currentUserId = context.read<AuthController>().user?.id;
+    _reportsSubscription ??= context.read<ReportController>().reports.listen(
+      _onReportsChanged,
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          _reportsError = error.toString();
+          _reportsLoading = false;
+        });
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final controller = context.watch<ReportController>();
     final shell = context.watch<AppShellController>();
-    final currentUserId = context.watch<AuthController>().user?.id;
+    _currentUserId = context.watch<AuthController>().user?.id;
     _moveCameraWhenLocationChanges(controller.currentPosition);
     _moveCameraForMapFocus(shell.mapFocusTarget, shell.mapFocusRequestId);
 
-    return Scaffold(
-      body: StreamBuilder<List<ParkingReport>>(
-        stream: controller.reports,
-        builder: (context, snapshot) {
-          final reports = snapshot.data ?? const <ParkingReport>[];
-          final reportMarkers = reports
-              .map((report) {
-                final isOwnReport = report.userId == currentUserId;
-                return Marker(
-                  markerId: MarkerId(report.id),
-                  position: LatLng(report.latitude, report.longitude),
-                  icon: _reportMarkerIcon(report, isOwnReport: isOwnReport),
-                  onTap: () => _openDetail(context, report.id),
-                  zIndexInt: isOwnReport ? 50 : 1,
-                );
-              })
-              .toSet();
-          final markers = {
-            ...reportMarkers,
-            if (_selectedReportPosition != null)
-              Marker(
-                markerId: const MarkerId('selected-report-position'),
-                position: _selectedReportPosition!,
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                infoWindow: const InfoWindow(title: 'Seçilen konum'),
-                zIndexInt: 999,
-              ),
-            Marker(
-              markerId: const MarkerId('current-location'),
-              position: controller.currentPosition,
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-              infoWindow: const InfoWindow(title: 'Konumum'),
-              onTap: () => _showCurrentAddress(controller.currentPosition),
-              zIndexInt: 1000,
-            ),
-          };
-          final circles = {
-            Circle(
-              circleId: const CircleId('current-location-radius'),
-              center: controller.currentPosition,
-              radius: 22,
-              strokeWidth: 4,
-              strokeColor: AppColors.red,
-              fillColor: AppColors.red.withValues(alpha: 0.16),
-            ),
-          };
+    final markers = {
+      ..._cachedReportMarkers,
+      if (_selectedReportPosition != null)
+        Marker(
+          markerId: const MarkerId('selected-report-position'),
+          position: _selectedReportPosition!,
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          infoWindow: const InfoWindow(title: 'Seçilen konum'),
+          zIndexInt: 999,
+        ),
+      Marker(
+        markerId: const MarkerId('current-location'),
+        position: controller.currentPosition,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        infoWindow: const InfoWindow(title: 'Konumum'),
+        onTap: () => _showCurrentAddress(controller.currentPosition),
+        zIndexInt: 1000,
+      ),
+    };
+    final circles = {
+      Circle(
+        circleId: const CircleId('current-location-radius'),
+        center: controller.currentPosition,
+        radius: 22,
+        strokeWidth: 4,
+        strokeColor: AppColors.red,
+        fillColor: AppColors.red.withValues(alpha: 0.16),
+      ),
+    };
 
-          return Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: controller.currentPosition,
-                  zoom: 16,
-                ),
-                onMapCreated: (mapController) {
-                  _mapController = mapController;
-                  _animateTo(controller.currentPosition, zoom: 16);
-                },
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                onTap: _selectReportLocation,
-                markers: markers,
-                circles: circles,
+    return Scaffold(
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: controller.currentPosition,
+              zoom: 16,
+            ),
+            onMapCreated: (mapController) {
+              _mapController = mapController;
+              _animateTo(controller.currentPosition, zoom: 16);
+              unawaited(_refreshVisibleBounds());
+            },
+            onCameraIdle: () => unawaited(_refreshVisibleBounds()),
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            onTap: _selectReportLocation,
+            markers: markers,
+            circles: circles,
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SearchBar(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    isSearching: _isSearchingAddress,
+                    onChanged: _onSearchChanged,
+                    onClear: _clearSearch,
+                  ),
+                  if (_addressSuggestions.isNotEmpty ||
+                      _addressSearchError != null)
+                    _AddressResults(
+                      suggestions: _addressSuggestions,
+                      errorMessage: _addressSearchError,
+                      onSelected: _selectSuggestion,
+                    ),
+                  const SizedBox(height: 10),
+                  const _FilterBar(),
+                ],
               ),
-              SafeArea(
+            ),
+          ),
+          if (_reportsLoading)
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
+          if (_reportsError != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 170,
+              child: Material(
+                color: Colors.red.shade700,
+                borderRadius: BorderRadius.circular(14),
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Text(
+                    'Bildirimler yüklenemedi. Firestore kurallarını kontrol et.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          if (_allReports.length > _cachedReportMarkers.length)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 196,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(14),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SearchBar(
-                        controller: _searchController,
-                        focusNode: _searchFocusNode,
-                        isSearching: _isSearchingAddress,
-                        onChanged: _onSearchChanged,
-                        onClear: _clearSearch,
-                      ),
-                      if (_addressSuggestions.isNotEmpty || _addressSearchError != null)
-                        _AddressResults(
-                          suggestions: _addressSuggestions,
-                          errorMessage: _addressSearchError,
-                          onSelected: _selectSuggestion,
-                        ),
-                      const SizedBox(height: 10),
-                      const _FilterBar(),
-                    ],
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Text(
+                    'Performans için yakındaki ${_cachedReportMarkers.length} bildirim gösteriliyor.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
               ),
-              if (snapshot.connectionState == ConnectionState.waiting)
-                const Align(
-                  alignment: Alignment.bottomCenter,
-                  child: LinearProgressIndicator(minHeight: 3),
-                ),
-              if (snapshot.hasError)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 170,
-                  child: Material(
-                    color: Colors.red.shade700,
-                    borderRadius: BorderRadius.circular(14),
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Text(
-                        'Bildirimler yüklenemedi. Firestore kurallarını kontrol et.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              Positioned(
-                right: 16,
-                bottom: 112,
-                child: FloatingActionButton.small(
-                  heroTag: 'go-to-current-location',
-                  backgroundColor: Colors.white,
-                  foregroundColor: AppColors.red,
-                  onPressed: _goToCurrentLocation,
-                  child: const Icon(Icons.my_location),
-                ),
-              ),
-              Positioned(
-                left: 72,
-                right: 72,
-                bottom: 24,
-                child: SafeArea(
-                  child: FilledButton.icon(
-                    onPressed: _openCreateReportFromSelectedPosition,
-                    icon: const Icon(Icons.add_location_alt),
-                    label: const Text('Bildirim'),
-                    style: FilledButton.styleFrom(
-                      elevation: 8,
-                      shadowColor: Colors.black.withValues(alpha: 0.25),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                    ),
+            ),
+          Positioned(
+            right: 16,
+            bottom: 112,
+            child: FloatingActionButton.small(
+              heroTag: 'go-to-current-location',
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.red,
+              onPressed: _goToCurrentLocation,
+              child: const Icon(Icons.my_location),
+            ),
+          ),
+          Positioned(
+            left: 72,
+            right: 72,
+            bottom: 24,
+            child: SafeArea(
+              child: FilledButton.icon(
+                onPressed: _openCreateReportFromSelectedPosition,
+                icon: const Icon(Icons.add_location_alt),
+                label: const Text('Bildirim'),
+                style: FilledButton.styleFrom(
+                  elevation: 8,
+                  shadowColor: Colors.black.withValues(alpha: 0.25),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
                   ),
                 ),
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _onReportsChanged(List<ParkingReport> reports) {
+    if (!mounted) return;
+    setState(() {
+      _allReports = reports;
+      _reportsLoading = false;
+      _reportsError = null;
+    });
+    _scheduleMarkerRebuild();
+  }
+
+  Future<void> _refreshVisibleBounds() async {
+    final mapController = _mapController;
+    if (mapController == null) return;
+    final bounds = await mapController.getVisibleRegion();
+    if (!mounted) return;
+    _visibleBounds = bounds;
+    _scheduleMarkerRebuild();
+  }
+
+  void _scheduleMarkerRebuild() {
+    _markerRebuildDebounce?.cancel();
+    _markerRebuildDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted) return;
+      _rebuildReportMarkers();
+    });
+  }
+
+  void _rebuildReportMarkers() {
+    if (!_markerIconsReady) return;
+
+    final center = context.read<ReportController>().currentPosition;
+    final visibleReports = _filterReportsForMap(_allReports, center);
+    final markers = visibleReports.map((report) {
+      final isOwnReport = report.userId == _currentUserId;
+      return Marker(
+        markerId: MarkerId(report.id),
+        position: LatLng(report.latitude, report.longitude),
+        icon: _reportMarkerIcon(report, isOwnReport: isOwnReport),
+        onTap: () => _openDetail(context, report.id),
+        zIndexInt: isOwnReport ? 50 : 1,
+      );
+    }).toSet();
+
+    setState(() => _cachedReportMarkers = markers);
+  }
+
+  List<ParkingReport> _filterReportsForMap(
+    List<ParkingReport> reports,
+    LatLng center,
+  ) {
+    Iterable<ParkingReport> visible = reports;
+    if (_visibleBounds != null) {
+      visible = visible.where(
+        (report) => _visibleBounds!.contains(
+          LatLng(report.latitude, report.longitude),
+        ),
+      );
+    }
+
+    final filtered = visible.toList();
+    if (filtered.length <= _maxVisibleMarkers) {
+      return filtered;
+    }
+
+    filtered.sort((a, b) {
+      final distanceA = _distanceSquared(center, a);
+      final distanceB = _distanceSquared(center, b);
+      return distanceA.compareTo(distanceB);
+    });
+    return filtered.take(_maxVisibleMarkers).toList();
+  }
+
+  double _distanceSquared(LatLng center, ParkingReport report) {
+    final deltaLat = center.latitude - report.latitude;
+    final deltaLng = center.longitude - report.longitude;
+    return (deltaLat * deltaLat) + (deltaLng * deltaLng);
+  }
+
+  Future<void> _preloadMarkerIcons() async {
+    for (final type in ReportType.values) {
+      for (final isOwn in [false, true]) {
+        final key = '${isOwn ? 'own' : 'all'}-${type.name}';
+        _reportIconCache[key] = await _buildReportMarkerIconForType(
+          type,
+          isOwnReport: isOwn,
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _markerIconsReady = true);
+    _scheduleMarkerRebuild();
   }
 
   void _openDetail(BuildContext context, String reportId) {
@@ -210,32 +340,20 @@ class _HomeMapPageState extends State<HomeMapPage> {
     required bool isOwnReport,
   }) {
     final key = '${isOwnReport ? 'own' : 'all'}-${report.type.name}';
-    final cachedIcon = _reportIconCache[key];
-    if (cachedIcon != null) return cachedIcon;
-
-    if (!_loadingReportIconKeys.contains(key)) {
-      _loadingReportIconKeys.add(key);
-      unawaited(_buildReportMarkerIcon(report, isOwnReport: isOwnReport).then((icon) {
-        if (!mounted) return;
-        setState(() {
-          _reportIconCache[key] = icon;
-          _loadingReportIconKeys.remove(key);
-        });
-      }));
-    }
-
-    return BitmapDescriptor.defaultMarkerWithHue(
-      isOwnReport ? BitmapDescriptor.hueViolet : report.type.markerHue,
-    );
+    return _reportIconCache[key] ??
+        BitmapDescriptor.defaultMarkerWithHue(
+          isOwnReport ? BitmapDescriptor.hueViolet : report.type.markerHue,
+        );
   }
 
-  Future<BitmapDescriptor> _buildReportMarkerIcon(
-    ParkingReport report, {
+  Future<BitmapDescriptor> _buildReportMarkerIconForType(
+    ReportType type, {
     required bool isOwnReport,
   }) async {
-    final color = isOwnReport ? Colors.deepPurple : report.type.color;
-    final label =
-        isOwnReport ? 'Benim ${_shortReportLabel(report.type)}' : _shortReportLabel(report.type);
+    final color = isOwnReport ? Colors.deepPurple : type.color;
+    final label = isOwnReport
+        ? 'Benim ${_shortReportLabel(type)}'
+        : _shortReportLabel(type);
     const pixelRatio = 3.0;
     const width = 112.0;
     const height = 52.0;
@@ -393,9 +511,8 @@ class _HomeMapPageState extends State<HomeMapPage> {
       if (!mounted) return;
       setState(() {
         _addressSuggestions = suggestions;
-        _addressSearchError = suggestions.isEmpty
-            ? 'Adres araması şu anda yapılamıyor.'
-            : null;
+        _addressSearchError =
+            suggestions.isEmpty ? 'Adres araması şu anda yapılamıyor.' : null;
         _isSearchingAddress = false;
       });
     }
@@ -539,7 +656,8 @@ class _HomeMapPageState extends State<HomeMapPage> {
     final mapController = _mapController;
     if (mapController == null) return;
     await mapController.animateCamera(
-      CameraUpdate.newCameraPosition(CameraPosition(target: position, zoom: zoom)),
+      CameraUpdate.newCameraPosition(
+          CameraPosition(target: position, zoom: zoom)),
     );
   }
 
@@ -564,7 +682,8 @@ class _HomeMapPageState extends State<HomeMapPage> {
     LatLng position, {
     String? knownAddress,
   }) async {
-    final address = knownAddress ?? await _addressService.reverseAddress(position);
+    final address =
+        knownAddress ?? await _addressService.reverseAddress(position);
     if (!mounted) return;
 
     final type = await showModalBottomSheet<ReportType>(
@@ -640,8 +759,8 @@ class _HomeMapPageState extends State<HomeMapPage> {
 
   Future<void> _openCreateReportFromSelectedPosition() async {
     if (!_ensureSignedInForReport()) return;
-    final position =
-        _selectedReportPosition ?? context.read<ReportController>().currentPosition;
+    final position = _selectedReportPosition ??
+        context.read<ReportController>().currentPosition;
     final address = await _addressService.reverseAddress(position);
     if (!mounted) return;
     await Navigator.of(context).push(
@@ -698,6 +817,8 @@ class _HomeMapPageState extends State<HomeMapPage> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _markerRebuildDebounce?.cancel();
+    _reportsSubscription?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _mapController?.dispose();
@@ -792,7 +913,8 @@ class _AddressResults extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final suggestion = suggestions[index];
                   return ListTile(
-                    leading: const Icon(Icons.place_outlined, color: AppColors.red),
+                    leading:
+                        const Icon(Icons.place_outlined, color: AppColors.red),
                     title: Text(suggestion.title),
                     onTap: () => onSelected(suggestion),
                   );
@@ -873,12 +995,14 @@ class _FilterBar extends StatelessWidget {
           _Chip(
             label: 'Son 7 Gün',
             selected: controller.filters.days == 7,
-            onSelected: () => controller.setDayFilter(controller.filters.days == 7 ? null : 7),
+            onSelected: () => controller
+                .setDayFilter(controller.filters.days == 7 ? null : 7),
           ),
           _Chip(
             label: 'Son 30 Gün',
             selected: controller.filters.days == 30,
-            onSelected: () => controller.setDayFilter(controller.filters.days == 30 ? null : 30),
+            onSelected: () => controller
+                .setDayFilter(controller.filters.days == 30 ? null : 30),
           ),
         ],
       ),

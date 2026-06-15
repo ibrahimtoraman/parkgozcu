@@ -31,17 +31,23 @@ class ReportRepository {
   final _uuid = const Uuid();
 
   Stream<List<ParkingReport>> watchReports(ReportFilters filters) {
-    return _firestore.collection('Reports').limit(250).snapshots().map((snapshot) {
+    return _firestore
+        .collection('Reports')
+        .limit(250)
+        .snapshots()
+        .map((snapshot) {
       var reports = snapshot.docs
           .map((doc) => ParkingReport.fromMap(doc.id, doc.data()))
           .toList();
 
       if (filters.type != null) {
-        reports = reports.where((report) => report.type == filters.type).toList();
+        reports =
+            reports.where((report) => report.type == filters.type).toList();
       }
 
       if (filters.days != null) {
-        final earliestDate = DateTime.now().subtract(Duration(days: filters.days!));
+        final earliestDate =
+            DateTime.now().subtract(Duration(days: filters.days!));
         reports = reports
             .where((report) => report.createdAt.isAfter(earliestDate))
             .toList();
@@ -239,7 +245,8 @@ class ReportRepository {
     }
 
     final reportRef = _firestore.collection('Reports').doc(reportId);
-    final reportSnapshot = await reportRef.get().timeout(const Duration(seconds: 8));
+    final reportSnapshot =
+        await reportRef.get().timeout(const Duration(seconds: 8));
     if (!reportSnapshot.exists) return;
 
     final reportUserId = reportSnapshot.data()?['userId'] as String?;
@@ -280,12 +287,12 @@ class ReportRepository {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-          final reports = snapshot.docs
-              .map((doc) => ParkingReport.fromMap(doc.id, doc.data()))
-              .toList();
-          reports.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          return reports;
-        });
+      final reports = snapshot.docs
+          .map((doc) => ParkingReport.fromMap(doc.id, doc.data()))
+          .toList();
+      reports.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return reports;
+    });
   }
 
   Stream<int> watchVerifiedUserReportCount(String userId) {
@@ -316,12 +323,15 @@ class ReportRepository {
     required String reportId,
     required File image,
   }) async {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_uuid.v4()}.jpg';
+    final fileName =
+        '${DateTime.now().millisecondsSinceEpoch}_${_uuid.v4()}.jpg';
     final ref = _storage.ref('Reports/$reportId/$fileName');
-    final upload = await ref.putFile(
-      image,
-      SettableMetadata(contentType: 'image/jpeg'),
-    ).timeout(const Duration(seconds: 10));
+    final upload = await ref
+        .putFile(
+          image,
+          SettableMetadata(contentType: 'image/jpeg'),
+        )
+        .timeout(const Duration(seconds: 10));
     return upload.ref.getDownloadURL().timeout(const Duration(seconds: 10));
   }
 }

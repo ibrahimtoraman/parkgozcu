@@ -8,9 +8,9 @@ import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/navigation/app_shell_controller.dart';
-import '../../../core/theme/theme_controller.dart';
 import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../auto_care/presentation/auto_care_page.dart';
 import '../../reports/domain/entities/report.dart';
 import '../../reports/presentation/home_map_page.dart';
 import '../../reports/presentation/report_detail_page.dart';
@@ -202,60 +202,6 @@ class ParkAreaPage extends StatelessWidget {
   }
 }
 
-class AutoCarePage extends StatelessWidget {
-  const AutoCarePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Oto Bakım')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: AppColors.red.withValues(alpha: 0.15),
-                    child: const Icon(Icons.car_repair, color: AppColors.red),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Araç bakım notları',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Bu bölümde ilerleyen aşamada periyodik bakım hatırlatmaları, lastik değişimi, sigorta ve servis notları yer alacak.',
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.darkGrey,
-                child: Icon(Icons.build, color: Colors.white),
-              ),
-              title: const Text('Yakında'),
-              subtitle:
-                  const Text('Bakım geçmişi ve servis önerileri eklenecek.'),
-              trailing: Icon(Icons.chevron_right, color: AppColors.mediumGrey),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
@@ -292,7 +238,7 @@ class ProfilePage extends StatelessWidget {
         children: [
           _ProfileHeroCard(
             name: user.name,
-            email: user.email.isEmpty ? 'Misafir kullanıcı' : user.email,
+            email: _formatProfileEmail(user.email),
             photoUrl: user.photoUrl,
           ),
           const SizedBox(height: 14),
@@ -516,7 +462,6 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeController = context.watch<ThemeController>();
     final auth = context.read<AuthController>();
 
     return EdgeSwipeBack(
@@ -525,42 +470,6 @@ class SettingsPage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tema',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    _ThemeOptionTile(
-                      value: ThemeMode.light,
-                      selectedValue: themeController.mode,
-                      onSelected: themeController.setMode,
-                      title: const Text('Açık'),
-                    ),
-                    _ThemeOptionTile(
-                      value: ThemeMode.dark,
-                      selectedValue: themeController.mode,
-                      onSelected: themeController.setMode,
-                      title: const Text('Koyu'),
-                    ),
-                    _ThemeOptionTile(
-                      value: ThemeMode.system,
-                      selectedValue: themeController.mode,
-                      onSelected: themeController.setMode,
-                      title: const Text('Cihaz'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             _SettingsTile(
               icon: Icons.description_outlined,
               title: 'Aydınlatma Metni',
@@ -626,32 +535,15 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-class _ThemeOptionTile extends StatelessWidget {
-  const _ThemeOptionTile({
-    required this.value,
-    required this.selectedValue,
-    required this.onSelected,
-    required this.title,
-  });
-
-  final ThemeMode value;
-  final ThemeMode selectedValue;
-  final ValueChanged<ThemeMode> onSelected;
-  final Widget title;
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = value == selectedValue;
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      onTap: () => onSelected(value),
-      title: title,
-      trailing: Icon(
-        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-        color: isSelected ? AppColors.red : AppColors.mediumGrey,
-      ),
-    );
+String _formatProfileEmail(String email) {
+  final trimmed = email.trim();
+  if (trimmed.isEmpty) {
+    return 'E-posta paylaşılmadı';
   }
+  if (trimmed.contains('privaterelay.appleid.com')) {
+    return trimmed;
+  }
+  return trimmed;
 }
 
 class _SettingsTile extends StatelessWidget {
@@ -924,6 +816,16 @@ class _ProfileHeroCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (email.contains('privaterelay.appleid.com')) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Apple gizli e-posta kullanılıyor',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.68),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Container(
                   padding:

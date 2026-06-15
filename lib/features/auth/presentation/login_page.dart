@@ -43,7 +43,8 @@ class LoginPage extends StatelessWidget {
                             ),
                           ),
                         FilledButton.icon(
-                          onPressed: auth.isLoading ? null : auth.signInWithGoogle,
+                          onPressed:
+                              auth.isLoading ? null : auth.signInWithGoogle,
                           icon: const Icon(Icons.g_mobiledata, size: 30),
                           label: const Text('Google ile giriş yap'),
                           style: FilledButton.styleFrom(
@@ -56,7 +57,8 @@ class LoginPage extends StatelessWidget {
                         if (showAppleSignIn) ...[
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
-                            onPressed: auth.isLoading ? null : auth.signInWithApple,
+                            onPressed:
+                                auth.isLoading ? null : auth.signInWithApple,
                             icon: const Icon(Icons.apple),
                             label: const Text('Apple ile giriş yap'),
                             style: OutlinedButton.styleFrom(

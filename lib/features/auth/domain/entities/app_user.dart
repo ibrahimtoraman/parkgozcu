@@ -38,4 +38,20 @@ class AppUser {
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
+
+  AppUser copyWith({
+    String? name,
+    String? email,
+    String? photoUrl,
+    int? score,
+  }) {
+    return AppUser(
+      id: id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      photoUrl: photoUrl ?? this.photoUrl,
+      score: score ?? this.score,
+      createdAt: createdAt,
+    );
+  }
 }

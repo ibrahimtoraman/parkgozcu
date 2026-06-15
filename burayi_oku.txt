@@ -8,3 +8,35 @@ git commit -m "Fix build path"
 git push
 
 komutlarıyla değişikliği GitHub'a gönderin.
+
+
+
+
+APPLE İÇİN:
+
+cd b:\parkgozcu
+git add lib/core/theme/app_theme.dart lib/core/theme/theme_controller.dart lib/features/profile/presentation/profile_page.dart lib/features/reports/presentation/report_detail_page.dart pubspec.yaml
+
+git commit -m "Improve dark theme, bottom nav, and photo preview dismiss"
+
+git push origin HEAD
+
+
+SONRA
+Codemagic’te build başlat
+https://codemagic.io/apps aç
+parkgozcu projesine gir
+Start new build (veya Build)
+
+
+
+SONRA
+ IPA’yı indir
+Build bitince:
+
+Build sayfasına gir
+Artifacts bölümünü aç
+.ipa dosyasını indir
+
+
+IPA indirdikten sonra https://www.diawi.com/ sitesine gir dosyayı at link oluştur sonra telefondan aç
