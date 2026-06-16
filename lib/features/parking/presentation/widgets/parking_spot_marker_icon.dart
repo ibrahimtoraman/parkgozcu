@@ -2,30 +2,27 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class ParkingSpotMarkerIcon {
-  static const assetPath = 'assets/images/park_spot_marker.svg';
+  static const assetPath = 'assets/images/park_spot_marker.png';
   static const frameCount = 8;
   static const pixelRatio = 3.0;
-  static const anchor = Offset(0.5, 0.97);
+  static const anchor = Offset(0.5, 0.98);
 
   static double? _cachedZoomBucket;
-  static ui.Picture? _svgPicture;
-  static Size _svgSize = Size.zero;
+  static ui.Image? _sourceImage;
+  static double _imageAspectRatio = 1.3;
   static final List<BitmapDescriptor> _frames = [];
 
   static double displayWidthForZoom(double zoom) {
-    const baseWidth = 42.0;
-    final scaled = baseWidth * math.pow(1.16, zoom - 16);
-    return scaled.clamp(30.0, 58.0);
+    const baseWidth = 26.0;
+    final scaled = baseWidth * math.pow(1.1, zoom - 16);
+    return scaled.clamp(20.0, 40.0);
   }
 
-  static Future<void> ensureFrames({
-    required double zoom,
-    required int frameIndex,
-  }) async {
+  static Future<void> ensureFrames({required double zoom}) async {
     final bucket = (zoom * 2).round() / 2;
     if (_cachedZoomBucket == bucket && _frames.length == frameCount) {
       return;
@@ -34,22 +31,21 @@ class ParkingSpotMarkerIcon {
     _cachedZoomBucket = bucket;
     _frames.clear();
 
-    if (_svgPicture == null) {
-      final pictureInfo = await vg.loadPicture(
-        SvgAssetLoader(assetPath),
-        null,
-      );
-      _svgPicture = pictureInfo.picture;
-      _svgSize = pictureInfo.size;
+    if (_sourceImage == null) {
+      final data = await rootBundle.load(assetPath);
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frameInfo = await codec.getNextFrame();
+      _sourceImage = frameInfo.image;
+      _imageAspectRatio = _sourceImage!.height / _sourceImage!.width;
     }
 
     final displayWidth = displayWidthForZoom(zoom);
-    final aspectRatio = _svgSize.height / _svgSize.width;
-    final displayHeight = displayWidth * aspectRatio;
+    final displayHeight = displayWidth * _imageAspectRatio;
 
     for (var frame = 0; frame < frameCount; frame++) {
       _frames.add(
         await _buildFrame(
+          image: _sourceImage!,
           displayWidth: displayWidth,
           displayHeight: displayHeight,
           bounceOffset: _bounceOffset(frame),
@@ -58,10 +54,7 @@ class ParkingSpotMarkerIcon {
     }
   }
 
-  static BitmapDescriptor frame({
-    required bool isOwnSpot,
-    required int frameIndex,
-  }) {
+  static BitmapDescriptor frame({required int frameIndex}) {
     if (_frames.isEmpty) {
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
     }
@@ -69,39 +62,49 @@ class ParkingSpotMarkerIcon {
   }
 
   static double _bounceOffset(int frame) {
-    return -6 * math.sin((frame / frameCount) * math.pi * 2);
+    return -5 * math.sin((frame / frameCount) * math.pi * 2);
   }
 
   static Future<BitmapDescriptor> _buildFrame({
+    required ui.Image image,
     required double displayWidth,
     required double displayHeight,
     required double bounceOffset,
   }) async {
-    const topPadding = 8.0;
+    const topPadding = 6.0;
     final canvasWidth = displayWidth * pixelRatio;
     final canvasHeight = (displayHeight + topPadding) * pixelRatio;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-
     canvas.scale(pixelRatio);
-    canvas.translate(0, topPadding + bounceOffset);
 
-    final scaleX = displayWidth / _svgSize.width;
-    final scaleY = displayHeight / _svgSize.height;
-    canvas.scale(scaleX, scaleY);
-    canvas.drawPicture(_svgPicture!);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(displayWidth / 2, displayHeight + topPadding - 1),
+        width: displayWidth * 0.34,
+        height: 5,
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.18),
+    );
+
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromLTWH(0, topPadding + bounceOffset, displayWidth, displayHeight),
+      Paint()..filterQuality = FilterQuality.high,
+    );
 
     final picture = recorder.endRecording();
-    final image = await picture.toImage(
+    final output = await picture.toImage(
       canvasWidth.round(),
       canvasHeight.round(),
     );
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = await output.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
   }
 
   static Future<void> preload({double zoom = 17}) {
-    return ensureFrames(zoom: zoom, frameIndex: 0);
+    return ensureFrames(zoom: zoom);
   }
 }

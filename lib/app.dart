@@ -15,6 +15,7 @@ import 'features/auth/presentation/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/parking/data/parking_spot_repository.dart';
 import 'features/parking/presentation/parking_spot_controller.dart';
+import 'features/profile/data/profile_repository.dart';
 import 'features/profile/presentation/profile_page.dart';
 import 'features/reports/data/report_repository.dart';
 import 'features/reports/presentation/report_controller.dart';
@@ -46,6 +47,12 @@ class ParkGozcuApp extends StatelessWidget {
         ),
         Provider(
           create: (_) => ParkingSpotRepository(
+            auth: FirebaseAuth.instance,
+            firestore: FirebaseFirestore.instance,
+          ),
+        ),
+        Provider(
+          create: (_) => ProfileRepository(
             auth: FirebaseAuth.instance,
             firestore: FirebaseFirestore.instance,
           ),

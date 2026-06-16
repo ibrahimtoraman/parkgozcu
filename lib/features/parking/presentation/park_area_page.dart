@@ -62,7 +62,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _currentUserId = context.read<AuthController>().user?.id;
+    _currentUserId = context.watch<AuthController>().user?.id;
     _spotsSubscription ??=
         context.read<ParkingSpotController>().spots.listen((spots) {
       if (!mounted) return;
@@ -302,26 +302,20 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
       return;
     }
 
-    await ParkingSpotMarkerIcon.ensureFrames(
-      zoom: _mapZoom,
-      frameIndex: _bounceFrame,
-    );
+    await ParkingSpotMarkerIcon.ensureFrames(zoom: _mapZoom);
 
     final markers = _spots.map((spot) {
-      final isOwnSpot = spot.userId == _currentUserId;
       return Marker(
         markerId: MarkerId(spot.id),
         position: LatLng(spot.latitude, spot.longitude),
-        icon: ParkingSpotMarkerIcon.frame(
-          isOwnSpot: isOwnSpot,
-          frameIndex: _bounceFrame,
-        ),
+        icon: ParkingSpotMarkerIcon.frame(frameIndex: _bounceFrame),
         anchor: ParkingSpotMarkerIcon.anchor,
+        onTap: () => _openSpotDetail(spot),
         infoWindow: InfoWindow(
           title: spot.remainingLabel,
           snippet: 'Bitiş: ${spot.expiresAtLabel('tr_TR')}',
         ),
-        zIndexInt: isOwnSpot ? 80 : 40,
+        zIndexInt: spot.userId == _currentUserId ? 80 : 40,
       );
     }).toSet();
 
@@ -330,7 +324,9 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   }
 
   Future<void> _openSpotDetail(ParkingSpot spot) async {
-    final isOwnSpot = spot.userId == _currentUserId;
+    final currentUserId = context.read<AuthController>().user?.id;
+    final isOwnSpot =
+        currentUserId != null && spot.userId.trim() == currentUserId.trim();
     await ParkingSpotDetailSheet.show(
       context,
       spot: spot,
@@ -455,7 +451,9 @@ class _ActiveSpotsStrip extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final spot = spots[index];
-          final isOwn = spot.userId == currentUserId;
+          final viewerId = currentUserId;
+          final isOwn =
+              viewerId != null && spot.userId.trim() == viewerId.trim();
           return Material(
             color: Colors.white,
             elevation: 3,

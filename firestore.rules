@@ -10,6 +10,15 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && request.auth.uid == userId;
       allow update: if signedIn() && request.auth.uid == userId;
+
+      match /appreciations/{giverId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.auth.uid == giverId
+          && request.auth.uid != userId
+          && request.resource.data.giverId == request.auth.uid;
+        allow update, delete: if false;
+      }
     }
 
     match /Reports/{reportId} {
