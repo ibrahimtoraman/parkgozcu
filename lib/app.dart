@@ -13,6 +13,8 @@ import 'core/theme/app_theme.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/auth_controller.dart';
 import 'features/auth/presentation/login_page.dart';
+import 'features/parking/data/parking_spot_repository.dart';
+import 'features/parking/presentation/parking_spot_controller.dart';
 import 'features/profile/presentation/profile_page.dart';
 import 'features/reports/data/report_repository.dart';
 import 'features/reports/presentation/report_controller.dart';
@@ -42,6 +44,12 @@ class ParkGozcuApp extends StatelessWidget {
             storage: FirebaseStorage.instance,
           ),
         ),
+        Provider(
+          create: (_) => ParkingSpotRepository(
+            auth: FirebaseAuth.instance,
+            firestore: FirebaseFirestore.instance,
+          ),
+        ),
         ChangeNotifierProvider(
           create: (context) => AuthController(
             repository: context.read<AuthRepository>(),
@@ -53,6 +61,11 @@ class ParkGozcuApp extends StatelessWidget {
             repository: context.read<ReportRepository>(),
             locationService: context.read<LocationService>(),
           )..loadInitialLocation(),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => ParkingSpotController(
+            repository: context.read<ParkingSpotRepository>(),
+          ),
         ),
       ],
       child: DeepLinkHandler(

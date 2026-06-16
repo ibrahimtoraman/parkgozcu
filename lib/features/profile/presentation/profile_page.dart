@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/navigation/app_shell_controller.dart';
@@ -13,11 +15,10 @@ import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auto_care/presentation/auto_care_page.dart';
 import '../../reports/domain/entities/report.dart';
+import '../../parking/presentation/park_area_page.dart';
 import '../../reports/presentation/home_map_page.dart';
 import '../../reports/presentation/report_detail_page.dart';
 import '../../reports/presentation/report_controller.dart';
-import '../domain/user_trust_profile.dart';
-import 'widgets/user_trust_summary.dart';
 
 class ProfileAwareShell extends StatelessWidget {
   const ProfileAwareShell({super.key});
@@ -163,48 +164,6 @@ class _ModernNavItem extends StatelessWidget {
   }
 }
 
-class ParkAreaPage extends StatelessWidget {
-  const ParkAreaPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Park Alanı')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: AppColors.red.withValues(alpha: 0.15),
-                    child:
-                        const Icon(Icons.local_parking, color: AppColors.red),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Yakındaki park alanları',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Bu bölümde ilerleyen aşamada güvenli park alanları, kullanıcı önerileri ve uygun park noktaları listelenecek.',
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
@@ -286,14 +245,6 @@ class ProfilePage extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder<UserTrustProfile>(
-            stream: reports.watchUserTrustProfile(user.id),
-            builder: (context, snapshot) {
-              final profile = snapshot.data ?? UserTrustProfile.empty;
-              return UserTrustSummary(profile: profile, compact: true);
-            },
           ),
           const SizedBox(height: 16),
           Card(
@@ -511,6 +462,17 @@ class SettingsPage extends StatelessWidget {
                     'Görüş, öneri ve destek talepleri için bizimle iletişime geçebilirsin.\n\nE-posta: destek@parkgozcu.com',
               ),
             ),
+            _SettingsTile(
+              icon: Icons.delete_forever_outlined,
+              title: 'Hesap Silme Talebi',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const _AccountDeletionRequestPage(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const _AppVersionTile(),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
@@ -815,23 +777,6 @@ class _ProfileHeroCard extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'ParkGözcü topluluk üyesi',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -889,6 +834,125 @@ class _MetricCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AppVersionTile extends StatelessWidget {
+  const _AppVersionTile();
+
+  Future<String> _loadVersionLabel() async {
+    final info = await PackageInfo.fromPlatform();
+    return 'v${info.version}(${info.buildNumber})';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _loadVersionLabel(),
+      builder: (context, snapshot) {
+        final version = snapshot.data ?? 'v—';
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppColors.red.withValues(alpha: 0.14),
+              child: const Icon(Icons.info_outline, color: AppColors.red),
+            ),
+            title: const Text('Uygulama Sürümü'),
+            trailing: Text(
+              version,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.mediumGrey,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AccountDeletionRequestPage extends StatelessWidget {
+  const _AccountDeletionRequestPage();
+
+  Future<void> _sendDeletionRequest(BuildContext context) async {
+    final auth = context.read<AuthController>();
+    final user = auth.user;
+    final userTag = user == null ? '' : formatUserTag(user.id);
+    final body = Uri.encodeComponent(
+      'Merhaba,\n\n'
+      'ParkGözcü hesabımın silinmesini talep ediyorum.\n\n'
+      'Ad: ${user?.name ?? ''}\n'
+      'Kullanıcı kodu: $userTag\n'
+      'E-posta: ${user?.email ?? ''}\n\n'
+      'Teşekkürler.',
+    );
+    final uri = Uri.parse(
+      'mailto:destek@parkgozcu.com?subject=Hesap%20Silme%20Talebi&body=$body',
+    );
+
+    final launched = await launchUrl(uri);
+    if (!context.mounted) return;
+
+    if (!launched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'E-posta uygulaması açılamadı. destek@parkgozcu.com adresine yazabilirsin.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return EdgeSwipeBack(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Hesap Silme Talebi')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.red.shade50,
+                      child: Icon(Icons.delete_forever_outlined,
+                          color: Colors.red.shade700),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Hesabını kalıcı olarak silmek istiyorsan bu talebi iletebilirsin.',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Talebin alındıktan sonra hesabın, bildirimlerin ve profil bilgilerin kalıcı olarak silinir. Bu işlem geri alınamaz.',
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Talep göndermek için aşağıdaki butona bas. E-posta uygulaman açılacak ve destek ekibimize iletilecek.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => _sendDeletionRequest(context),
+              icon: const Icon(Icons.mail_outline),
+              label: const Text('Silme Talebi Gönder'),
+            ),
+          ],
+        ),
       ),
     );
   }
