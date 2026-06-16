@@ -297,8 +297,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
           isOwnSpot: isOwnSpot,
           frameIndex: _bounceFrame,
         ),
-        anchor: const Offset(0.5, 1.0),
-        onTap: () => _openSpotDetail(spot),
+        anchor: ParkingSpotMarkerIcon.anchor,
         infoWindow: InfoWindow(
           title: spot.remainingLabel,
           snippet: 'Bitiş: ${spot.expiresAtLabel('tr_TR')}',

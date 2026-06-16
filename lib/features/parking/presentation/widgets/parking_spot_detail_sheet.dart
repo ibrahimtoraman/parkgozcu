@@ -49,13 +49,13 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
     _remaining = widget.spot.remainingTime;
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(
-        Uri.parse(
-          parkingSpotStreetViewEmbedUrl(
-            latitude: widget.spot.latitude,
-            longitude: widget.spot.longitude,
-          ),
+      ..setBackgroundColor(const Color(0xFFE8E8E8))
+      ..loadHtmlString(
+        parkingSpotStreetViewEmbedHtml(
+          latitude: widget.spot.latitude,
+          longitude: widget.spot.longitude,
         ),
+        baseUrl: 'https://www.google.com',
       );
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;

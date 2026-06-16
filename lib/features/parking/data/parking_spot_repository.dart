@@ -133,3 +133,46 @@ String parkingSpotStreetViewEmbedUrl({
       '&location=$latitude,$longitude'
       '&heading=210&pitch=5&fov=90';
 }
+
+String parkingSpotStreetViewEmbedHtml({
+  required double latitude,
+  required double longitude,
+}) {
+  final embedUrl = parkingSpotStreetViewEmbedUrl(
+    latitude: latitude,
+    longitude: longitude,
+  );
+
+  return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #e8e8e8;
+    }
+    iframe {
+      border: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <iframe
+    allowfullscreen
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    src="$embedUrl">
+  </iframe>
+</body>
+</html>
+''';
+}
