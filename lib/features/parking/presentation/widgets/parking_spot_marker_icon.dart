@@ -3,23 +3,35 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class ParkingSpotMarkerIcon {
-  static const assetPath = 'assets/images/park_spot_marker.png';
-  static const frameCount = 8;
-  static const pixelRatio = 3.0;
-  static const anchor = Offset(0.5, 0.98);
+  static const assetPath = 'assets/images/park_spot_marker.svg';
+  static const frameCount = 6;
+  static const pixelRatio = 4.0;
+  static const viewBoxWidth = 120.0;
+  static const viewBoxHeight = 156.0;
+  static const pinTipY = 92.0;
+  static const topPadding = 4.0;
+  static const bottomPadding = 8.0;
+
+  static Offset anchorForZoom(double zoom) {
+    final displayWidth = displayWidthForZoom(zoom);
+    final displayHeight = displayWidth * (viewBoxHeight / viewBoxWidth);
+    final tipY = topPadding + (pinTipY / viewBoxHeight) * displayHeight;
+    final totalHeight = topPadding + displayHeight + bottomPadding;
+    return Offset(0.5, tipY / totalHeight);
+  }
 
   static double? _cachedZoomBucket;
   static ui.Image? _sourceImage;
-  static double _imageAspectRatio = 1.3;
   static final List<BitmapDescriptor> _frames = [];
 
   static double displayWidthForZoom(double zoom) {
-    const baseWidth = 26.0;
-    final scaled = baseWidth * math.pow(1.1, zoom - 16);
-    return scaled.clamp(20.0, 40.0);
+    const baseWidth = 30.0;
+    final scaled = baseWidth * math.pow(1.08, zoom - 16);
+    return scaled.clamp(24.0, 46.0);
   }
 
   static Future<void> ensureFrames({required double zoom}) async {
@@ -32,15 +44,11 @@ class ParkingSpotMarkerIcon {
     _frames.clear();
 
     if (_sourceImage == null) {
-      final data = await rootBundle.load(assetPath);
-      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
-      final frameInfo = await codec.getNextFrame();
-      _sourceImage = frameInfo.image;
-      _imageAspectRatio = _sourceImage!.height / _sourceImage!.width;
+      _sourceImage = await _loadSvgImage();
     }
 
     final displayWidth = displayWidthForZoom(zoom);
-    final displayHeight = displayWidth * _imageAspectRatio;
+    final displayHeight = displayWidth * (viewBoxHeight / viewBoxWidth);
 
     for (var frame = 0; frame < frameCount; frame++) {
       _frames.add(
@@ -62,7 +70,27 @@ class ParkingSpotMarkerIcon {
   }
 
   static double _bounceOffset(int frame) {
-    return -5 * math.sin((frame / frameCount) * math.pi * 2);
+    return -2.5 * math.sin((frame / frameCount) * math.pi * 2);
+  }
+
+  static Future<ui.Image> _loadSvgImage() async {
+    final svgString = await rootBundle.loadString(assetPath);
+    final pictureInfo = await vg.loadPicture(
+      SvgStringLoader(svgString),
+      null,
+    );
+
+    final renderWidth = (viewBoxWidth * pixelRatio).round();
+    final renderHeight = (viewBoxHeight * pixelRatio).round();
+    final scale = renderWidth / pictureInfo.size.width;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(scale);
+    canvas.drawPicture(pictureInfo.picture);
+
+    final picture = recorder.endRecording();
+    return picture.toImage(renderWidth, renderHeight);
   }
 
   static Future<BitmapDescriptor> _buildFrame({
@@ -71,27 +99,24 @@ class ParkingSpotMarkerIcon {
     required double displayHeight,
     required double bounceOffset,
   }) async {
-    const topPadding = 6.0;
+    const topPadding = ParkingSpotMarkerIcon.topPadding;
+    const bottomPadding = ParkingSpotMarkerIcon.bottomPadding;
     final canvasWidth = displayWidth * pixelRatio;
-    final canvasHeight = (displayHeight + topPadding) * pixelRatio;
+    final canvasHeight = (displayHeight + topPadding + bottomPadding) * pixelRatio;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.scale(pixelRatio);
 
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(displayWidth / 2, displayHeight + topPadding - 1),
-        width: displayWidth * 0.34,
-        height: 5,
-      ),
-      Paint()..color = Colors.black.withValues(alpha: 0.18),
-    );
-
     canvas.drawImageRect(
       image,
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-      Rect.fromLTWH(0, topPadding + bounceOffset, displayWidth, displayHeight),
+      Rect.fromLTWH(
+        0,
+        topPadding + bounceOffset,
+        displayWidth,
+        displayHeight,
+      ),
       Paint()..filterQuality = FilterQuality.high,
     );
 

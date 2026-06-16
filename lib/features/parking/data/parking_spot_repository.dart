@@ -1,9 +1,24 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/parking_spot.dart';
+
+const _googleMapsApiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
+
+class ParkingSpotPreview {
+  const ParkingSpotPreview({
+    required this.imageUrl,
+    required this.isStreetView,
+  });
+
+  final String imageUrl;
+  final bool isStreetView;
+}
 
 class ParkingSpotRepository {
   ParkingSpotRepository({
@@ -126,26 +141,88 @@ Future<bool> openParkingSpotDirections({
 String parkingSpotStreetViewStaticUrl({
   required double latitude,
   required double longitude,
+  String? panoId,
   int width = 640,
   int height = 480,
 }) {
-  const apiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
+  final locationParam = panoId != null && panoId.isNotEmpty
+      ? 'pano=$panoId'
+      : 'location=$latitude,$longitude';
   return 'https://maps.googleapis.com/maps/api/streetview'
       '?size=${width}x$height'
-      '&location=$latitude,$longitude'
+      '&$locationParam'
       '&fov=90'
       '&heading=210'
       '&pitch=5'
-      '&key=$apiKey';
+      '&source=outdoor'
+      '&key=$_googleMapsApiKey';
+}
+
+String parkingSpotMapPreviewUrl({
+  required double latitude,
+  required double longitude,
+  int width = 640,
+  int height = 480,
+}) {
+  return 'https://maps.googleapis.com/maps/api/staticmap'
+      '?center=$latitude,$longitude'
+      '&zoom=18'
+      '&size=${width}x$height'
+      '&maptype=satellite'
+      '&markers=color:0x16A34A%7C$latitude,$longitude'
+      '&key=$_googleMapsApiKey';
+}
+
+Future<ParkingSpotPreview> resolveParkingSpotPreview({
+  required double latitude,
+  required double longitude,
+}) async {
+  try {
+    final metaUri = Uri.https(
+      'maps.googleapis.com',
+      '/maps/api/streetview/metadata',
+      {
+        'location': '$latitude,$longitude',
+        'key': _googleMapsApiKey,
+        'source': 'outdoor',
+      },
+    );
+    final response = await http.get(metaUri).timeout(const Duration(seconds: 8));
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (body['status'] == 'OK') {
+        final location = body['location'] as Map<String, dynamic>?;
+        final panoLat = (location?['lat'] as num?)?.toDouble() ?? latitude;
+        final panoLng = (location?['lng'] as num?)?.toDouble() ?? longitude;
+        final panoId = body['pano_id'] as String?;
+
+        return ParkingSpotPreview(
+          imageUrl: parkingSpotStreetViewStaticUrl(
+            latitude: panoLat,
+            longitude: panoLng,
+            panoId: panoId,
+          ),
+          isStreetView: true,
+        );
+      }
+    }
+  } catch (_) {}
+
+  return ParkingSpotPreview(
+    imageUrl: parkingSpotMapPreviewUrl(
+      latitude: latitude,
+      longitude: longitude,
+    ),
+    isStreetView: false,
+  );
 }
 
 String parkingSpotStreetViewEmbedUrl({
   required double latitude,
   required double longitude,
 }) {
-  const apiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
   return 'https://www.google.com/maps/embed/v1/streetview'
-      '?key=$apiKey'
+      '?key=$_googleMapsApiKey'
       '&location=$latitude,$longitude'
       '&heading=210&pitch=5&fov=90';
 }

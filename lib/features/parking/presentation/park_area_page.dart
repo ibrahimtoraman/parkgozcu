@@ -22,6 +22,7 @@ class ParkAreaPage extends StatefulWidget {
 
 class _ParkAreaPageState extends State<ParkAreaPage> {
   static const _parkTabIndex = 1;
+  static const _maxVisibleSpots = 50;
 
   final _addressService = AddressService();
   GoogleMapController? _mapController;
@@ -30,6 +31,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   Timer? _bounceTimer;
   List<ParkingSpot> _spots = const [];
   Set<Marker> _spotMarkers = {};
+  LatLngBounds? _visibleBounds;
   LatLng? _selectedPosition;
   bool _isSubmitting = false;
   String? _errorMessage;
@@ -41,16 +43,17 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   int _clockTick = 0;
   double _mapZoom = 17;
   Timer? _zoomRebuildDebounce;
+  Timer? _markerRebuildDebounce;
 
   @override
   void initState() {
     super.initState();
-    _bounceTimer = Timer.periodic(const Duration(milliseconds: 90), (_) {
-      if (!mounted || !_iconsReady || _spots.isEmpty) return;
+    _bounceTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
+      if (!mounted || !_iconsReady || _visibleSpots().isEmpty) return;
       setState(() {
         _bounceFrame = (_bounceFrame + 1) % ParkingSpotMarkerIcon.frameCount;
       });
-      unawaited(_rebuildSpotMarkers());
+      _scheduleMarkerRebuild();
     });
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || _spots.isEmpty) return;
@@ -67,7 +70,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
         context.read<ParkingSpotController>().spots.listen((spots) {
       if (!mounted) return;
       setState(() => _spots = spots);
-      unawaited(_rebuildSpotMarkers());
+      _scheduleMarkerRebuild();
     });
   }
 
@@ -84,9 +87,61 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
     _mapZoom = nextZoom;
     _zoomRebuildDebounce?.cancel();
     _zoomRebuildDebounce = Timer(const Duration(milliseconds: 120), () {
-      if (!mounted || !_iconsReady || _spots.isEmpty) return;
-      unawaited(_rebuildSpotMarkers());
+      if (!mounted || !_iconsReady) return;
+      _scheduleMarkerRebuild(forceIconRebuild: true);
     });
+  }
+
+  void _scheduleMarkerRebuild({bool forceIconRebuild = false}) {
+    _markerRebuildDebounce?.cancel();
+    _markerRebuildDebounce = Timer(const Duration(milliseconds: 80), () {
+      if (!mounted || !_iconsReady) return;
+      unawaited(_rebuildSpotMarkers(forceIconRebuild: forceIconRebuild));
+    });
+  }
+
+  Future<void> _refreshVisibleBounds() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final bounds = await controller.getVisibleRegion();
+    if (!mounted) return;
+    _visibleBounds = bounds;
+    _scheduleMarkerRebuild();
+  }
+
+  List<ParkingSpot> _visibleSpots() {
+    if (_visibleBounds == null) {
+      return const [];
+    }
+
+    final filtered = _spots
+        .where(
+          (spot) => _visibleBounds!.contains(
+            LatLng(spot.latitude, spot.longitude),
+          ),
+        )
+        .toList();
+
+    if (filtered.length <= _maxVisibleSpots) {
+      return filtered;
+    }
+
+    final center = _lastFocusedPosition;
+    if (center != null) {
+      filtered.sort((a, b) {
+        final distanceA = _distanceSquared(center, a);
+        final distanceB = _distanceSquared(center, b);
+        return distanceA.compareTo(distanceB);
+      });
+    }
+
+    return filtered.take(_maxVisibleSpots).toList();
+  }
+
+  double _distanceSquared(LatLng center, ParkingSpot spot) {
+    final deltaLat = center.latitude - spot.latitude;
+    final deltaLng = center.longitude - spot.longitude;
+    return (deltaLat * deltaLat) + (deltaLng * deltaLng);
   }
 
   @override
@@ -107,6 +162,8 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
     if (shell.selectedIndex == _parkTabIndex) {
       _moveCameraWhenLocationChanges(currentPosition);
     }
+
+    final visibleSpots = _visibleSpots();
 
     final markers = {
       ..._spotMarkers,
@@ -141,14 +198,16 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
             onMapCreated: (controller) {
               _mapController = controller;
               unawaited(_focusCurrentLocation(currentPosition, force: true));
+              unawaited(_refreshVisibleBounds());
             },
             onCameraMove: _onCameraMove,
+            onCameraIdle: () => unawaited(_refreshVisibleBounds()),
             onTap: _selectPosition,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             markers: markers,
             padding: EdgeInsets.only(
-              bottom: _spots.isEmpty ? 120 : 210,
+              bottom: visibleSpots.isEmpty ? 120 : 210,
               top: 72,
             ),
           ),
@@ -180,13 +239,13 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
               ),
             ),
           ),
-          if (_spots.isNotEmpty)
+          if (visibleSpots.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
               bottom: 96,
               child: _ActiveSpotsStrip(
-                spots: _spots,
+                spots: visibleSpots,
                 currentUserId: _currentUserId,
                 onSpotTap: _openSpotDetail,
               ),
@@ -195,7 +254,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
             Positioned(
               left: 16,
               right: 16,
-              bottom: _spots.isEmpty ? 120 : 210,
+              bottom: visibleSpots.isEmpty ? 120 : 210,
               child: Material(
                 color: Colors.red.shade700,
                 borderRadius: BorderRadius.circular(14),
@@ -292,24 +351,27 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
     setState(() => _selectedPosition = position);
   }
 
-  Future<void> _rebuildSpotMarkers() async {
+  Future<void> _rebuildSpotMarkers({bool forceIconRebuild = false}) async {
     if (!_iconsReady) return;
 
-    if (_spots.isEmpty) {
+    final visibleSpots = _visibleSpots();
+    if (visibleSpots.isEmpty) {
       if (_spotMarkers.isNotEmpty) {
         setState(() => _spotMarkers = {});
       }
       return;
     }
 
-    await ParkingSpotMarkerIcon.ensureFrames(zoom: _mapZoom);
+    if (forceIconRebuild || _spotMarkers.isEmpty) {
+      await ParkingSpotMarkerIcon.ensureFrames(zoom: _mapZoom);
+    }
 
-    final markers = _spots.map((spot) {
+    final markers = visibleSpots.map((spot) {
       return Marker(
         markerId: MarkerId(spot.id),
         position: LatLng(spot.latitude, spot.longitude),
         icon: ParkingSpotMarkerIcon.frame(frameIndex: _bounceFrame),
-        anchor: ParkingSpotMarkerIcon.anchor,
+        anchor: ParkingSpotMarkerIcon.anchorForZoom(_mapZoom),
         onTap: () => _openSpotDetail(spot),
         infoWindow: InfoWindow(
           title: spot.remainingLabel,
@@ -417,6 +479,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
         CameraPosition(target: position, zoom: zoom, tilt: 0, bearing: 0),
       ),
     );
+    await _refreshVisibleBounds();
   }
 
   @override
@@ -424,6 +487,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
     _bounceTimer?.cancel();
     _clockTimer?.cancel();
     _zoomRebuildDebounce?.cancel();
+    _markerRebuildDebounce?.cancel();
     _spotsSubscription?.cancel();
     super.dispose();
   }

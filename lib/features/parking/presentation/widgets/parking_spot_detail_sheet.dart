@@ -41,6 +41,8 @@ class ParkingSpotDetailSheet extends StatefulWidget {
 class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
   Timer? _timer;
   late Duration _remaining;
+  ParkingSpotPreview? _preview;
+  bool _previewLoading = true;
 
   @override
   void initState() {
@@ -49,6 +51,19 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _remaining = widget.spot.remainingTime);
+    });
+    unawaited(_loadPreview());
+  }
+
+  Future<void> _loadPreview() async {
+    final preview = await resolveParkingSpotPreview(
+      latitude: widget.spot.latitude,
+      longitude: widget.spot.longitude,
+    );
+    if (!mounted) return;
+    setState(() {
+      _preview = preview;
+      _previewLoading = false;
     });
   }
 
@@ -85,10 +100,7 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final expiresAt = widget.spot.expiresAtLabel('tr_TR');
-    final streetViewUrl = parkingSpotStreetViewStaticUrl(
-      latitude: widget.spot.latitude,
-      longitude: widget.spot.longitude,
-    );
+    final preview = _preview;
 
     return SafeArea(
       child: Padding(
@@ -138,25 +150,17 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
               child: SizedBox(
                 height: 220,
                 width: double.infinity,
-                child: CachedNetworkImage(
-                  imageUrl: streetViewUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (_, __, ___) => Container(
-                    color: Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.all(16),
-                    child: const Text(
-                      'Bu nokta için sokak görünümü bulunamadı.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
+                child: _buildPreview(preview),
               ),
             ),
+            if (preview != null && !preview.isStreetView) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Bu noktada sokak görünümü yok; uydu görüntüsü gösteriliyor.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 10),
             Text(
               widget.spot.address.isEmpty
@@ -183,6 +187,33 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreview(ParkingSpotPreview? preview) {
+    if (_previewLoading || preview == null) {
+      return Container(
+        color: Colors.grey.shade200,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: preview.imageUrl,
+      fit: BoxFit.cover,
+      placeholder: (_, __) => Container(
+        color: Colors.grey.shade200,
+        child: const Center(child: CircularProgressIndicator()),
+      ),
+      errorWidget: (_, __, ___) => Container(
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(16),
+        child: const Text(
+          'Konum görüntüsü yüklenemedi.',
+          textAlign: TextAlign.center,
         ),
       ),
     );
