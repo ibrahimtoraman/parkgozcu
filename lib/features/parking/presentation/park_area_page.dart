@@ -39,6 +39,8 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   LatLng? _lastFocusedPosition;
   int _bounceFrame = 0;
   int _clockTick = 0;
+  double _mapZoom = 17;
+  Timer? _zoomRebuildDebounce;
 
   @override
   void initState() {
@@ -70,10 +72,21 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   }
 
   Future<void> _preloadIcons() async {
-    await ParkingSpotMarkerIcon.preload();
+    await ParkingSpotMarkerIcon.preload(zoom: _mapZoom);
     if (!mounted) return;
     setState(() => _iconsReady = true);
     await _rebuildSpotMarkers();
+  }
+
+  void _onCameraMove(CameraPosition position) {
+    final nextZoom = position.zoom;
+    if ((nextZoom - _mapZoom).abs() < 0.08) return;
+    _mapZoom = nextZoom;
+    _zoomRebuildDebounce?.cancel();
+    _zoomRebuildDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (!mounted || !_iconsReady || _spots.isEmpty) return;
+      unawaited(_rebuildSpotMarkers());
+    });
   }
 
   @override
@@ -129,6 +142,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
               _mapController = controller;
               unawaited(_focusCurrentLocation(currentPosition, force: true));
             },
+            onCameraMove: _onCameraMove,
             onTap: _selectPosition,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
@@ -288,6 +302,11 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
       return;
     }
 
+    await ParkingSpotMarkerIcon.ensureFrames(
+      zoom: _mapZoom,
+      frameIndex: _bounceFrame,
+    );
+
     final markers = _spots.map((spot) {
       final isOwnSpot = spot.userId == _currentUserId;
       return Marker(
@@ -408,6 +427,7 @@ class _ParkAreaPageState extends State<ParkAreaPage> {
   void dispose() {
     _bounceTimer?.cancel();
     _clockTimer?.cancel();
+    _zoomRebuildDebounce?.cancel();
     _spotsSubscription?.cancel();
     super.dispose();
   }

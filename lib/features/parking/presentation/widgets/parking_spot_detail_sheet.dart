@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../data/parking_spot_repository.dart';
 import '../../domain/parking_spot.dart';
@@ -41,22 +41,11 @@ class ParkingSpotDetailSheet extends StatefulWidget {
 class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
   Timer? _timer;
   late Duration _remaining;
-  late final WebViewController _webViewController;
 
   @override
   void initState() {
     super.initState();
     _remaining = widget.spot.remainingTime;
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFE8E8E8))
-      ..loadHtmlString(
-        parkingSpotStreetViewEmbedHtml(
-          latitude: widget.spot.latitude,
-          longitude: widget.spot.longitude,
-        ),
-        baseUrl: 'https://www.google.com',
-      );
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _remaining = widget.spot.remainingTime);
@@ -96,6 +85,10 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final expiresAt = widget.spot.expiresAtLabel('tr_TR');
+    final streetViewUrl = parkingSpotStreetViewStaticUrl(
+      latitude: widget.spot.latitude,
+      longitude: widget.spot.longitude,
+    );
 
     return SafeArea(
       child: Padding(
@@ -143,8 +136,25 @@ class _ParkingSpotDetailSheetState extends State<ParkingSpotDetailSheet> {
             ClipRRect(
               borderRadius: BorderRadius.circular(18),
               child: SizedBox(
-                height: 240,
-                child: WebViewWidget(controller: _webViewController),
+                height: 220,
+                width: double.infinity,
+                child: CachedNetworkImage(
+                  imageUrl: streetViewUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    color: Colors.grey.shade200,
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(16),
+                    child: const Text(
+                      'Bu nokta için sokak görünümü bulunamadı.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 10),

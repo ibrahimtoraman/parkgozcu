@@ -2,32 +2,59 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class ParkingSpotMarkerIcon {
-  static const assetPath = 'assets/images/park_spot_marker.png';
+  static const assetPath = 'assets/images/park_spot_marker.svg';
   static const frameCount = 8;
-  static const displayWidth = 68.0;
   static const pixelRatio = 3.0;
-  static const anchor = Offset(0.5, 0.98);
+  static const anchor = Offset(0.5, 0.97);
 
-  static ui.Image? _sourceImage;
+  static double? _cachedZoomBucket;
+  static ui.Picture? _svgPicture;
+  static Size _svgSize = Size.zero;
   static final List<BitmapDescriptor> _frames = [];
 
-  static Future<void> preload() async {
-    if (_frames.isNotEmpty) return;
+  static double displayWidthForZoom(double zoom) {
+    const baseWidth = 42.0;
+    final scaled = baseWidth * math.pow(1.16, zoom - 16);
+    return scaled.clamp(30.0, 58.0);
+  }
 
-    final data = await rootBundle.load(assetPath);
-    final codec = await ui.instantiateImageCodec(
-      data.buffer.asUint8List(),
-      targetWidth: (displayWidth * pixelRatio).round(),
-    );
-    final frameInfo = await codec.getNextFrame();
-    _sourceImage = frameInfo.image;
+  static Future<void> ensureFrames({
+    required double zoom,
+    required int frameIndex,
+  }) async {
+    final bucket = (zoom * 2).round() / 2;
+    if (_cachedZoomBucket == bucket && _frames.length == frameCount) {
+      return;
+    }
+
+    _cachedZoomBucket = bucket;
+    _frames.clear();
+
+    if (_svgPicture == null) {
+      final pictureInfo = await vg.loadPicture(
+        SvgAssetLoader(assetPath),
+        null,
+      );
+      _svgPicture = pictureInfo.picture;
+      _svgSize = pictureInfo.size;
+    }
+
+    final displayWidth = displayWidthForZoom(zoom);
+    final aspectRatio = _svgSize.height / _svgSize.width;
+    final displayHeight = displayWidth * aspectRatio;
 
     for (var frame = 0; frame < frameCount; frame++) {
-      _frames.add(await _buildFrame(_bounceOffset(frame)));
+      _frames.add(
+        await _buildFrame(
+          displayWidth: displayWidth,
+          displayHeight: displayHeight,
+          bounceOffset: _bounceOffset(frame),
+        ),
+      );
     }
   }
 
@@ -42,43 +69,39 @@ class ParkingSpotMarkerIcon {
   }
 
   static double _bounceOffset(int frame) {
-    return -8 * math.sin((frame / frameCount) * math.pi * 2);
+    return -6 * math.sin((frame / frameCount) * math.pi * 2);
   }
 
-  static Future<BitmapDescriptor> _buildFrame(double bounceOffset) async {
-    final image = _sourceImage!;
-    final width = image.width.toDouble();
-    final height = image.height.toDouble();
-    const topPadding = 10.0;
-    final canvasHeight = height + topPadding;
+  static Future<BitmapDescriptor> _buildFrame({
+    required double displayWidth,
+    required double displayHeight,
+    required double bounceOffset,
+  }) async {
+    const topPadding = 8.0;
+    final canvasWidth = displayWidth * pixelRatio;
+    final canvasHeight = (displayHeight + topPadding) * pixelRatio;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    final shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.22)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(width / 2, canvasHeight - 3),
-        width: width * 0.38,
-        height: 7,
-      ),
-      shadowPaint,
-    );
+    canvas.scale(pixelRatio);
+    canvas.translate(0, topPadding + bounceOffset);
 
-    canvas.drawImage(
-      image,
-      Offset(0, topPadding + bounceOffset),
-      Paint()..filterQuality = FilterQuality.high,
-    );
+    final scaleX = displayWidth / _svgSize.width;
+    final scaleY = displayHeight / _svgSize.height;
+    canvas.scale(scaleX, scaleY);
+    canvas.drawPicture(_svgPicture!);
 
     final picture = recorder.endRecording();
-    final output = await picture.toImage(
-      width.round(),
+    final image = await picture.toImage(
+      canvasWidth.round(),
       canvasHeight.round(),
     );
-    final bytes = await output.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+  }
+
+  static Future<void> preload({double zoom = 17}) {
+    return ensureFrames(zoom: zoom, frameIndex: 0);
   }
 }

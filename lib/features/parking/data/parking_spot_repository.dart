@@ -123,6 +123,22 @@ Future<bool> openParkingSpotDirections({
   return launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
+String parkingSpotStreetViewStaticUrl({
+  required double latitude,
+  required double longitude,
+  int width = 640,
+  int height = 480,
+}) {
+  const apiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
+  return 'https://maps.googleapis.com/maps/api/streetview'
+      '?size=${width}x$height'
+      '&location=$latitude,$longitude'
+      '&fov=90'
+      '&heading=210'
+      '&pitch=5'
+      '&key=$apiKey';
+}
+
 String parkingSpotStreetViewEmbedUrl({
   required double latitude,
   required double longitude,
