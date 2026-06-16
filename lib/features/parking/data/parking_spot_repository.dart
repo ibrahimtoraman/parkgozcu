@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/parking_spot.dart';
@@ -64,18 +65,9 @@ class ParkingSpotRepository {
 
     final now = DateTime.now();
     final expiresAt = now.add(ParkingSpot.lifetime);
-    final batch = _firestore.batch();
-
-    final existing = await _firestore
-        .collection('ParkingSpots')
-        .where('userId', isEqualTo: userId)
-        .get();
-    for (final doc in existing.docs) {
-      batch.delete(doc.reference);
-    }
-
     final id = _uuid.v4();
-    batch.set(_firestore.collection('ParkingSpots').doc(id), {
+
+    await _firestore.collection('ParkingSpots').doc(id).set({
       'userId': userId,
       'userName': userName,
       'latitude': latitude,
@@ -85,7 +77,6 @@ class ParkingSpotRepository {
       'expiresAt': Timestamp.fromDate(expiresAt),
     });
 
-    await batch.commit();
     return id;
   }
 
@@ -110,4 +101,14 @@ class ParkingSpotRepository {
 
     await doc.reference.delete();
   }
+}
+
+Future<bool> openParkingSpotStreetView({
+  required double latitude,
+  required double longitude,
+}) async {
+  final uri = Uri.parse(
+    'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=$latitude,$longitude',
+  );
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
 }

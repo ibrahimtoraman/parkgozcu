@@ -1,7 +1,7 @@
 name: parkgozcu
 description: Park cezasi ve arac cekilme noktalarini toplulukla paylasan mobil uygulama.
 publish_to: "none"
-version: 0.1.1+21
+version: 0.1.1+22
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

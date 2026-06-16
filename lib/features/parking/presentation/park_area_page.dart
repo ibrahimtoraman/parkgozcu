@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/navigation/app_shell_controller.dart';
 import '../../../core/services/address_service.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../reports/presentation/report_controller.dart';
+import '../data/parking_spot_repository.dart';
 import '../domain/parking_spot.dart';
 import 'parking_spot_controller.dart';
 import 'widgets/parking_spot_detail_sheet.dart';
@@ -22,6 +23,8 @@ class ParkAreaPage extends StatefulWidget {
 
 class _ParkAreaPageState extends State<ParkAreaPage>
     with SingleTickerProviderStateMixin {
+  static const _parkTabIndex = 1;
+
   final _addressService = AddressService();
   GoogleMapController? _mapController;
   StreamSubscription<List<ParkingSpot>>? _spotsSubscription;
@@ -31,24 +34,22 @@ class _ParkAreaPageState extends State<ParkAreaPage>
   bool _isSubmitting = false;
   String? _errorMessage;
   String? _currentUserId;
-  late final AnimationController _bounceController;
-  Timer? _markerRefreshTimer;
-  double _bouncePhase = 0;
+  bool _iconsReady = false;
+  int? _lastVisibleTabIndex;
+  LatLng? _lastFocusedPosition;
+  late final AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _bounceController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-    _bounceController.addListener(() {
-      _bouncePhase = _bounceController.value * math.pi;
+    _pulseController.addListener(() {
+      if (mounted && _spots.isNotEmpty) setState(() {});
     });
-    _markerRefreshTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
-      if (!mounted || _spots.isEmpty) return;
-      unawaited(_rebuildSpotMarkers());
-    });
+    unawaited(_preloadIcons());
   }
 
   @override
@@ -63,10 +64,43 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     });
   }
 
+  Future<void> _preloadIcons() async {
+    await ParkingSpotMarkerIcon.preload();
+    if (!mounted) return;
+    setState(() => _iconsReady = true);
+    await _rebuildSpotMarkers();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final shell = context.watch<AppShellController>();
     final reportController = context.watch<ReportController>();
     final currentPosition = reportController.currentPosition;
+
+    if (shell.selectedIndex == _parkTabIndex && _lastVisibleTabIndex != _parkTabIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_focusCurrentLocation(currentPosition, force: true));
+        unawaited(reportController.refreshCurrentLocation());
+      });
+    }
+    _lastVisibleTabIndex = shell.selectedIndex;
+
+    if (shell.selectedIndex == _parkTabIndex) {
+      _moveCameraWhenLocationChanges(currentPosition);
+    }
+
+    final pulse = Curves.easeInOut.transform(_pulseController.value);
+    final pulseCircles = _spots.map((spot) {
+      return Circle(
+        circleId: CircleId('pulse-${spot.id}'),
+        center: LatLng(spot.latitude, spot.longitude),
+        radius: 6 + (pulse * 10),
+        fillColor: const Color(0xFF4CAF50).withValues(alpha: 0.12 + pulse * 0.14),
+        strokeColor: const Color(0xFF2E7D32).withValues(alpha: 0.35 + pulse * 0.35),
+        strokeWidth: 2,
+        zIndex: 1,
+      );
+    }).toSet();
 
     final markers = {
       ..._spotMarkers,
@@ -85,7 +119,7 @@ class _ParkAreaPageState extends State<ParkAreaPage>
         title: const Text('Park Alanı'),
         actions: [
           IconButton(
-            onPressed: () => _goToCurrentLocation(currentPosition),
+            onPressed: () => _focusCurrentLocation(currentPosition, force: true),
             icon: const Icon(Icons.my_location),
             tooltip: 'Konumum',
           ),
@@ -96,16 +130,17 @@ class _ParkAreaPageState extends State<ParkAreaPage>
           GoogleMap(
             initialCameraPosition: CameraPosition(
               target: currentPosition,
-              zoom: 16.5,
+              zoom: 17,
             ),
             onMapCreated: (controller) {
               _mapController = controller;
-              _animateTo(currentPosition);
+              unawaited(_focusCurrentLocation(currentPosition, force: true));
             },
             onTap: _selectPosition,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             markers: markers,
+            circles: pulseCircles,
             padding: const EdgeInsets.only(bottom: 120, top: 72),
           ),
           SafeArea(
@@ -217,11 +252,29 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     );
   }
 
+  void _moveCameraWhenLocationChanges(LatLng currentPosition) {
+    if (_lastFocusedPosition == null) {
+      _lastFocusedPosition = currentPosition;
+      return;
+    }
+
+    final deltaLat = (_lastFocusedPosition!.latitude - currentPosition.latitude).abs();
+    final deltaLng = (_lastFocusedPosition!.longitude - currentPosition.longitude).abs();
+    if (deltaLat < 0.00005 && deltaLng < 0.00005) return;
+
+    _lastFocusedPosition = currentPosition;
+    if (_selectedPosition == null) {
+      unawaited(_animateTo(currentPosition, zoom: 17));
+    }
+  }
+
   void _selectPosition(LatLng position) {
     setState(() => _selectedPosition = position);
   }
 
   Future<void> _rebuildSpotMarkers() async {
+    if (!_iconsReady) return;
+
     if (_spots.isEmpty) {
       if (_spotMarkers.isNotEmpty) {
         setState(() => _spotMarkers = {});
@@ -229,34 +282,42 @@ class _ParkAreaPageState extends State<ParkAreaPage>
       return;
     }
 
-    final bounceOffset =
-        ParkingSpotMarkerIcon.bounceOffsetForPhase(_bouncePhase);
-    final markers = <Marker>{};
-
-    for (final spot in _spots) {
+    final markers = _spots.map((spot) {
       final isOwnSpot = spot.userId == _currentUserId;
-      final icon = await ParkingSpotMarkerIcon.build(
-        bounceOffset: bounceOffset,
-        isOwnSpot: isOwnSpot,
+      return Marker(
+        markerId: MarkerId(spot.id),
+        position: LatLng(spot.latitude, spot.longitude),
+        icon: ParkingSpotMarkerIcon.icon(isOwnSpot: isOwnSpot),
+        anchor: const Offset(0.5, 1.0),
+        onTap: () => _onSpotTapped(spot, isOwnSpot),
+        zIndexInt: isOwnSpot ? 80 : 40,
       );
-      markers.add(
-        Marker(
-          markerId: MarkerId(spot.id),
-          position: LatLng(spot.latitude, spot.longitude),
-          icon: icon,
-          anchor: const Offset(0.5, 1.0),
-          onTap: () => ParkingSpotDetailSheet.show(
-            context,
-            spot: spot,
-            isOwnSpot: isOwnSpot,
-          ),
-          zIndexInt: isOwnSpot ? 80 : 40,
-        ),
-      );
-    }
+    }).toSet();
 
     if (!mounted) return;
     setState(() => _spotMarkers = markers);
+  }
+
+  Future<void> _onSpotTapped(ParkingSpot spot, bool isOwnSpot) async {
+    if (isOwnSpot) {
+      await ParkingSpotDetailSheet.show(
+        context,
+        spot: spot,
+        isOwnSpot: true,
+      );
+      return;
+    }
+
+    final opened = await openParkingSpotStreetView(
+      latitude: spot.latitude,
+      longitude: spot.longitude,
+    );
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sokak Görünümü açılamadı. Google Maps yüklü olmalı.'),
+      ),
+    );
   }
 
   Future<void> _reportAvailableSpot() async {
@@ -278,24 +339,17 @@ class _ParkAreaPageState extends State<ParkAreaPage>
       final address = await _addressService.reverseAddress(position);
       if (!mounted) return;
 
-      final parkingController = context.read<ParkingSpotController>();
-      await parkingController.reportAvailableSpot(
-        userId: user.id,
-        userName: user.name,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        address: address,
-      );
+      await context.read<ParkingSpotController>().reportAvailableSpot(
+            userId: user.id,
+            userName: user.name,
+            latitude: position.latitude,
+            longitude: position.longitude,
+            address: address,
+          );
 
       if (!mounted) return;
       setState(() => _selectedPosition = null);
       await _animateTo(position, zoom: 17.5);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Boş park yeri 10 dakika boyunca haritada görünecek.'),
-        ),
-      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _errorMessage = 'Park yeri bildirilemedi. Tekrar dene.');
@@ -335,25 +389,25 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     return false;
   }
 
-  Future<void> _goToCurrentLocation(LatLng position) async {
-    setState(() => _selectedPosition = null);
-    await _animateTo(position, zoom: 16.5);
+  Future<void> _focusCurrentLocation(LatLng position, {required bool force}) async {
+    if (!force && _selectedPosition != null) return;
+    _lastFocusedPosition = position;
+    await _animateTo(position, zoom: 17);
   }
 
-  Future<void> _animateTo(LatLng position, {double zoom = 16.5}) async {
+  Future<void> _animateTo(LatLng position, {double zoom = 17}) async {
     final controller = _mapController;
     if (controller == null) return;
     await controller.animateCamera(
       CameraUpdate.newCameraPosition(
-        CameraPosition(target: position, zoom: zoom),
+        CameraPosition(target: position, zoom: zoom, tilt: 0, bearing: 0),
       ),
     );
   }
 
   @override
   void dispose() {
-    _bounceController.dispose();
-    _markerRefreshTimer?.cancel();
+    _pulseController.dispose();
     _spotsSubscription?.cancel();
     super.dispose();
   }
