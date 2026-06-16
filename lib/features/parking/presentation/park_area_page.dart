@@ -8,7 +8,6 @@ import '../../../core/navigation/app_shell_controller.dart';
 import '../../../core/services/address_service.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../reports/presentation/report_controller.dart';
-import '../data/parking_spot_repository.dart';
 import '../domain/parking_spot.dart';
 import 'parking_spot_controller.dart';
 import 'widgets/parking_spot_detail_sheet.dart';
@@ -21,13 +20,14 @@ class ParkAreaPage extends StatefulWidget {
   State<ParkAreaPage> createState() => _ParkAreaPageState();
 }
 
-class _ParkAreaPageState extends State<ParkAreaPage>
-    with SingleTickerProviderStateMixin {
+class _ParkAreaPageState extends State<ParkAreaPage> {
   static const _parkTabIndex = 1;
 
   final _addressService = AddressService();
   GoogleMapController? _mapController;
   StreamSubscription<List<ParkingSpot>>? _spotsSubscription;
+  Timer? _clockTimer;
+  Timer? _bounceTimer;
   List<ParkingSpot> _spots = const [];
   Set<Marker> _spotMarkers = {};
   LatLng? _selectedPosition;
@@ -37,17 +37,22 @@ class _ParkAreaPageState extends State<ParkAreaPage>
   bool _iconsReady = false;
   int? _lastVisibleTabIndex;
   LatLng? _lastFocusedPosition;
-  late final AnimationController _pulseController;
+  int _bounceFrame = 0;
+  int _clockTick = 0;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulseController.addListener(() {
-      if (mounted && _spots.isNotEmpty) setState(() {});
+    _bounceTimer = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (!mounted || !_iconsReady || _spots.isEmpty) return;
+      setState(() {
+        _bounceFrame = (_bounceFrame + 1) % ParkingSpotMarkerIcon.frameCount;
+      });
+      unawaited(_rebuildSpotMarkers());
+    });
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _spots.isEmpty) return;
+      setState(() => _clockTick++);
     });
     unawaited(_preloadIcons());
   }
@@ -76,6 +81,7 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     final shell = context.watch<AppShellController>();
     final reportController = context.watch<ReportController>();
     final currentPosition = reportController.currentPosition;
+    final _ = _clockTick;
 
     if (shell.selectedIndex == _parkTabIndex && _lastVisibleTabIndex != _parkTabIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -88,19 +94,6 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     if (shell.selectedIndex == _parkTabIndex) {
       _moveCameraWhenLocationChanges(currentPosition);
     }
-
-    final pulse = Curves.easeInOut.transform(_pulseController.value);
-    final pulseCircles = _spots.map((spot) {
-      return Circle(
-        circleId: CircleId('pulse-${spot.id}'),
-        center: LatLng(spot.latitude, spot.longitude),
-        radius: 6 + (pulse * 10),
-        fillColor: const Color(0xFF4CAF50).withValues(alpha: 0.12 + pulse * 0.14),
-        strokeColor: const Color(0xFF2E7D32).withValues(alpha: 0.35 + pulse * 0.35),
-        strokeWidth: 2,
-        zIndex: 1,
-      );
-    }).toSet();
 
     final markers = {
       ..._spotMarkers,
@@ -140,8 +133,10 @@ class _ParkAreaPageState extends State<ParkAreaPage>
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             markers: markers,
-            circles: pulseCircles,
-            padding: const EdgeInsets.only(bottom: 120, top: 72),
+            padding: EdgeInsets.only(
+              bottom: _spots.isEmpty ? 120 : 210,
+              top: 72,
+            ),
           ),
           SafeArea(
             child: Padding(
@@ -154,7 +149,7 @@ class _ParkAreaPageState extends State<ParkAreaPage>
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
-                      Icon(Icons.timer_outlined, color: Color(0xFF2E7D32)),
+                      Icon(Icons.timer_outlined, color: Color(0xFF16A34A)),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -171,11 +166,22 @@ class _ParkAreaPageState extends State<ParkAreaPage>
               ),
             ),
           ),
+          if (_spots.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 96,
+              child: _ActiveSpotsStrip(
+                spots: _spots,
+                currentUserId: _currentUserId,
+                onSpotTap: _openSpotDetail,
+              ),
+            ),
           if (_errorMessage != null)
             Positioned(
               left: 16,
               right: 16,
-              bottom: 120,
+              bottom: _spots.isEmpty ? 120 : 210,
               child: Material(
                 color: Colors.red.shade700,
                 borderRadius: BorderRadius.circular(14),
@@ -236,7 +242,7 @@ class _ParkAreaPageState extends State<ParkAreaPage>
                           : 'Seçili yerde boş park bildir',
                     ),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
+                      backgroundColor: const Color(0xFF16A34A),
                       minimumSize: const Size.fromHeight(52),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
@@ -287,9 +293,16 @@ class _ParkAreaPageState extends State<ParkAreaPage>
       return Marker(
         markerId: MarkerId(spot.id),
         position: LatLng(spot.latitude, spot.longitude),
-        icon: ParkingSpotMarkerIcon.icon(isOwnSpot: isOwnSpot),
+        icon: ParkingSpotMarkerIcon.frame(
+          isOwnSpot: isOwnSpot,
+          frameIndex: _bounceFrame,
+        ),
         anchor: const Offset(0.5, 1.0),
-        onTap: () => _onSpotTapped(spot, isOwnSpot),
+        onTap: () => _openSpotDetail(spot),
+        infoWindow: InfoWindow(
+          title: spot.remainingLabel,
+          snippet: 'Bitiş: ${spot.expiresAtLabel('tr_TR')}',
+        ),
         zIndexInt: isOwnSpot ? 80 : 40,
       );
     }).toSet();
@@ -298,25 +311,12 @@ class _ParkAreaPageState extends State<ParkAreaPage>
     setState(() => _spotMarkers = markers);
   }
 
-  Future<void> _onSpotTapped(ParkingSpot spot, bool isOwnSpot) async {
-    if (isOwnSpot) {
-      await ParkingSpotDetailSheet.show(
-        context,
-        spot: spot,
-        isOwnSpot: true,
-      );
-      return;
-    }
-
-    final opened = await openParkingSpotStreetView(
-      latitude: spot.latitude,
-      longitude: spot.longitude,
-    );
-    if (!mounted || opened) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sokak Görünümü açılamadı. Google Maps yüklü olmalı.'),
-      ),
+  Future<void> _openSpotDetail(ParkingSpot spot) async {
+    final isOwnSpot = spot.userId == _currentUserId;
+    await ParkingSpotDetailSheet.show(
+      context,
+      spot: spot,
+      isOwnSpot: isOwnSpot,
     );
   }
 
@@ -407,8 +407,87 @@ class _ParkAreaPageState extends State<ParkAreaPage>
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _bounceTimer?.cancel();
+    _clockTimer?.cancel();
     _spotsSubscription?.cancel();
     super.dispose();
+  }
+}
+
+class _ActiveSpotsStrip extends StatelessWidget {
+  const _ActiveSpotsStrip({
+    required this.spots,
+    required this.currentUserId,
+    required this.onSpotTap,
+  });
+
+  final List<ParkingSpot> spots;
+  final String? currentUserId;
+  final ValueChanged<ParkingSpot> onSpotTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        scrollDirection: Axis.horizontal,
+        itemCount: spots.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final spot = spots[index];
+          final isOwn = spot.userId == currentUserId;
+          return Material(
+            color: Colors.white,
+            elevation: 3,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => onSpotTap(spot),
+              child: Container(
+                width: 168,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.local_parking,
+                          size: 18,
+                          color: isOwn ? const Color(0xFF15803D) : const Color(0xFF22C55E),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isOwn ? 'Senin bildirimin' : 'Boş park',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      spot.remainingLabel,
+                      style: const TextStyle(
+                        color: Color(0xFF16A34A),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      'Bitiş: ${spot.expiresAtLabel('tr_TR')}',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

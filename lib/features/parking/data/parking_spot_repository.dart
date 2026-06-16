@@ -112,3 +112,24 @@ Future<bool> openParkingSpotStreetView({
   );
   return launchUrl(uri, mode: LaunchMode.externalApplication);
 }
+
+Future<bool> openParkingSpotDirections({
+  required double latitude,
+  required double longitude,
+}) async {
+  final uri = Uri.parse(
+    'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
+  );
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+String parkingSpotStreetViewEmbedUrl({
+  required double latitude,
+  required double longitude,
+}) {
+  const apiKey = 'AIzaSyCg81cHh7wkLFHQUQizINpovwjP7PcQ2Kw';
+  return 'https://www.google.com/maps/embed/v1/streetview'
+      '?key=$apiKey'
+      '&location=$latitude,$longitude'
+      '&heading=210&pitch=5&fov=90';
+}

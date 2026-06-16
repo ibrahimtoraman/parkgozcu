@@ -11,6 +11,7 @@ import '../../../core/widgets/edge_swipe_back.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/maintenance_note_storage.dart';
 import '../domain/maintenance_note.dart';
+import 'hgs_tracking_tab.dart';
 
 class AutoCarePage extends StatefulWidget {
   const AutoCarePage({super.key});
@@ -19,7 +20,8 @@ class AutoCarePage extends StatefulWidget {
   State<AutoCarePage> createState() => _AutoCarePageState();
 }
 
-class _AutoCarePageState extends State<AutoCarePage> {
+class _AutoCarePageState extends State<AutoCarePage>
+    with SingleTickerProviderStateMixin {
   static const _categories = [
     'Periyodik Bakım',
     'Lastik',
@@ -30,10 +32,24 @@ class _AutoCarePageState extends State<AutoCarePage> {
 
   final _storage = MaintenanceNoteStorage();
   final _dateFormat = DateFormat.yMMMd('tr_TR');
+  late final TabController _tabController;
 
   List<MaintenanceNote> _notes = [];
   bool _isLoading = true;
   String? _loadedUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -157,8 +173,19 @@ class _AutoCarePageState extends State<AutoCarePage> {
     final auth = context.watch<AuthController>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Oto Bakım')),
-      floatingActionButton: auth.isGuest
+      appBar: AppBar(
+        title: const Text('Oto Bakım'),
+        bottom: auth.isGuest
+            ? null
+            : TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Bakım Notları'),
+                  Tab(text: 'HGS Takip'),
+                ],
+              ),
+      ),
+      floatingActionButton: auth.isGuest || _tabController.index != 0
           ? null
           : FloatingActionButton.extended(
               onPressed: () => _openNoteEditor(),
@@ -167,81 +194,84 @@ class _AutoCarePageState extends State<AutoCarePage> {
             ),
       body: auth.isGuest
           ? _GuestAutoCareGate(onSignIn: auth.signOut)
-          : _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _notes.isEmpty
-                  ? _EmptyAutoCare(onAdd: () => _openNoteEditor())
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                      itemCount: _notes.length,
-                      itemBuilder: (context, index) {
-                        final note = _notes[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            contentPadding:
-                                const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                            leading: CircleAvatar(
-                              backgroundColor:
-                                  AppColors.red.withValues(alpha: 0.14),
-                              child: Icon(
-                                _categoryIcon(note.category),
-                                color: AppColors.red,
-                              ),
-                            ),
-                            title: Text(
-                              note.title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${note.category} • ${_dateFormat.format(note.date)}',
-                                ),
-                                if (note.kilometer != null)
-                                  Text(
-                                    KilometerFormatter.formatForDisplay(
-                                      note.kilometer!,
-                                    ),
-                                  ),
-                                if (note.description.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    note.description,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ],
-                            ),
-                            isThreeLine: true,
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'edit') {
-                                  _openNoteEditor(note: note);
-                                } else if (value == 'delete') {
-                                  _deleteNote(note);
-                                }
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(
-                                  value: 'edit',
-                                  child: Text('Düzenle'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Sil'),
-                                ),
-                              ],
-                            ),
-                            onTap: () => _openNoteEditor(note: note),
-                          ),
-                        );
-                      },
-                    ),
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildMaintenanceTab(),
+                const HgsTrackingTab(),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildMaintenanceTab() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_notes.isEmpty) {
+      return _EmptyAutoCare(onAdd: () => _openNoteEditor());
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      itemCount: _notes.length,
+      itemBuilder: (context, index) {
+        final note = _notes[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+            leading: CircleAvatar(
+              backgroundColor: AppColors.red.withValues(alpha: 0.14),
+              child: Icon(
+                _categoryIcon(note.category),
+                color: AppColors.red,
+              ),
+            ),
+            title: Text(
+              note.title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  '${note.category} • ${_dateFormat.format(note.date)}',
+                ),
+                if (note.kilometer != null)
+                  Text(
+                    KilometerFormatter.formatForDisplay(note.kilometer!),
+                  ),
+                if (note.description.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    note.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+            isThreeLine: true,
+            trailing: PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _openNoteEditor(note: note);
+                } else if (value == 'delete') {
+                  _deleteNote(note);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('Düzenle')),
+                PopupMenuItem(value: 'delete', child: Text('Sil')),
+              ],
+            ),
+            onTap: () => _openNoteEditor(note: note),
+          ),
+        );
+      },
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class ParkingSpot {
   const ParkingSpot({
@@ -28,6 +29,19 @@ class ParkingSpot {
   Duration get remainingTime {
     final remaining = expiresAt.difference(DateTime.now());
     return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  String get remainingLabel {
+    final remaining = remainingTime;
+    if (remaining <= Duration.zero) return 'Süresi doldu';
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+    if (minutes > 0) return '$minutes dk $seconds sn';
+    return '$seconds sn';
+  }
+
+  String expiresAtLabel(String locale) {
+    return DateFormat.Hm(locale).format(expiresAt);
   }
 
   factory ParkingSpot.fromMap(String id, Map<String, dynamic> map) {

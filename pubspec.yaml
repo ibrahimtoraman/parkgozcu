@@ -1,7 +1,7 @@
 name: parkgozcu
 description: Park cezasi ve arac cekilme noktalarini toplulukla paylasan mobil uygulama.
 publish_to: "none"
-version: 0.1.1+22
+version: 0.1.1+25
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -32,6 +32,7 @@ dependencies:
   sign_in_with_apple: ^6.1.4
   uuid: ^4.5.1
   url_launcher: ^6.3.2
+  webview_flutter: ^4.13.0
   flutter_svg: ^2.3.0
 
 dev_dependencies:

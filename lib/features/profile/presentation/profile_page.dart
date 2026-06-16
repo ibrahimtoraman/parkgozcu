@@ -429,65 +429,73 @@ class SettingsPage extends StatelessWidget {
     return EdgeSwipeBack(
       child: Scaffold(
         appBar: AppBar(title: const Text('Ayarlar')),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
+        body: Stack(
           children: [
-            _SettingsTile(
-              icon: Icons.description_outlined,
-              title: 'Aydınlatma Metni',
-              onTap: () => _openInfoPage(
-                context,
-                title: 'Aydınlatma Metni',
-                body:
-                    'ParkGözcü, bildirim oluşturma ve topluluk doğrulama özellikleri için konum, açıklama, fotoğraf ve hesap bilgilerini işler. Bu bilgiler uygulama deneyimini sağlamak, güvenliği artırmak ve bildirimleri toplulukla paylaşmak amacıyla kullanılır.',
-              ),
-            ),
-            _SettingsTile(
-              icon: Icons.gavel_outlined,
-              title: 'Kullanım Koşulları',
-              onTap: () => _openInfoPage(
-                context,
-                title: 'Kullanım Koşulları',
-                body:
-                    'ParkGözcü üzerinde paylaşılan bildirimlerin doğru, güncel ve iyi niyetli olması kullanıcıların sorumluluğundadır. Yanlış veya yanıltıcı içerikler topluluk doğrulamasıyla işaretlenebilir.',
-              ),
-            ),
-            _SettingsTile(
-              icon: Icons.mail_outline,
-              title: 'İletişim',
-              onTap: () => _openInfoPage(
-                context,
-                title: 'İletişim',
-                body:
-                    'Görüş, öneri ve destek talepleri için bizimle iletişime geçebilirsin.\n\nE-posta: destek@parkgozcu.com',
-              ),
-            ),
-            _SettingsTile(
-              icon: Icons.delete_forever_outlined,
-              title: 'Hesap Silme Talebi',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const _AccountDeletionRequestPage(),
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 56),
+              children: [
+                _SettingsTile(
+                  icon: Icons.description_outlined,
+                  title: 'Aydınlatma Metni',
+                  onTap: () => _openInfoPage(
+                    context,
+                    title: 'Aydınlatma Metni',
+                    body:
+                        'ParkGözcü, bildirim oluşturma ve topluluk doğrulama özellikleri için konum, açıklama, fotoğraf ve hesap bilgilerini işler. Bu bilgiler uygulama deneyimini sağlamak, güvenliği artırmak ve bildirimleri toplulukla paylaşmak amacıyla kullanılır.',
+                  ),
                 ),
-              ),
+                _SettingsTile(
+                  icon: Icons.gavel_outlined,
+                  title: 'Kullanım Koşulları',
+                  onTap: () => _openInfoPage(
+                    context,
+                    title: 'Kullanım Koşulları',
+                    body:
+                        'ParkGözcü üzerinde paylaşılan bildirimlerin doğru, güncel ve iyi niyetli olması kullanıcıların sorumluluğundadır. Yanlış veya yanıltıcı içerikler topluluk doğrulamasıyla işaretlenebilir.',
+                  ),
+                ),
+                _SettingsTile(
+                  icon: Icons.mail_outline,
+                  title: 'İletişim',
+                  onTap: () => _openInfoPage(
+                    context,
+                    title: 'İletişim',
+                    body:
+                        'Görüş, öneri ve destek talepleri için bizimle iletişime geçebilirsin.\n\nE-posta: destek@parkgozcu.com',
+                  ),
+                ),
+                _SettingsTile(
+                  icon: Icons.delete_forever_outlined,
+                  title: 'Hesap Silme Talebi',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const _AccountDeletionRequestPage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade700),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () async {
+                    await auth.signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Çıkış Yap'),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            const _AppVersionTile(),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red.shade700,
-                side: BorderSide(color: Colors.red.shade700),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: () async {
-                await auth.signOut();
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Çıkış Yap'),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 12,
+              child: _SettingsVersionLabel(),
             ),
           ],
         ),
@@ -839,10 +847,10 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
-class _AppVersionTile extends StatelessWidget {
-  const _AppVersionTile();
+class _SettingsVersionLabel extends StatelessWidget {
+  const _SettingsVersionLabel();
 
-  Future<String> _loadVersionLabel() async {
+  static Future<String> loadLabel() async {
     final info = await PackageInfo.fromPlatform();
     return 'v${info.version}(${info.buildNumber})';
   }
@@ -850,23 +858,15 @@ class _AppVersionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<String>(
-      future: _loadVersionLabel(),
+      future: loadLabel(),
       builder: (context, snapshot) {
-        final version = snapshot.data ?? 'v—';
-        return Card(
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppColors.red.withValues(alpha: 0.14),
-              child: const Icon(Icons.info_outline, color: AppColors.red),
-            ),
-            title: const Text('Uygulama Sürümü'),
-            trailing: Text(
-              version,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppColors.mediumGrey,
-              ),
-            ),
+        return Text(
+          snapshot.data ?? 'v—',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+            color: AppColors.mediumGrey.withValues(alpha: 0.85),
           ),
         );
       },
